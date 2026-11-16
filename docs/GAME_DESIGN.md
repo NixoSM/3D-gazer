@@ -79,7 +79,7 @@ thin dashed ring on the wall marks your best distance.
 Forward speed grows linearly with progress: `v = base · (1 + 0.2 · s/L)`.
 Because speed depends on position, the run time is
 `T = L / (0.2 · base) · ln(1.2)`, and levels are sized so that `T = 60 s`
-(see `SpeedProfile`). Base speeds: Dawn 13.65 m/s, Tide 17.5, Ember 21.
+(see `SpeedProfile`). Base speeds: Dawn 20 m/s, Tide 23.2, Ember 27.
 
 Numbers alone did not make the faster levels *feel* faster on a phone, so
 speed drives the presentation too:
