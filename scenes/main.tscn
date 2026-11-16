@@ -1,0 +1,106 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://src/app/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://src/input/input_router.gd" id="2_input"]
+[ext_resource type="Script" path="res://src/gameplay/game_session.gd" id="3_session"]
+[ext_resource type="Resource" path="res://resources/ball_tuning.tres" id="4_tuning"]
+[ext_resource type="Script" path="res://src/presentation/world_view.gd" id="5_world"]
+[ext_resource type="Script" path="res://src/presentation/tunnel_view.gd" id="6_tunnel"]
+[ext_resource type="Script" path="res://src/presentation/ball_view.gd" id="7_ball"]
+[ext_resource type="Script" path="res://src/presentation/camera_rig.gd" id="8_camera"]
+[ext_resource type="Script" path="res://src/presentation/effects/effects_director.gd" id="9_effects"]
+[ext_resource type="Script" path="res://src/presentation/feedback/tone_synth.gd" id="10_synth"]
+[ext_resource type="Script" path="res://src/ui/hud.gd" id="11_hud"]
+[ext_resource type="Script" path="res://src/ui/menu_screen.gd" id="12_menu"]
+[ext_resource type="Script" path="res://src/ui/pause_screen.gd" id="13_pause"]
+[ext_resource type="Script" path="res://src/ui/results_screen.gd" id="14_results"]
+
+[node name="Main" type="Node"]
+process_mode = 3
+script = ExtResource("1_main")
+
+[node name="InputRouter" type="Node" parent="."]
+process_mode = 1
+script = ExtResource("2_input")
+
+[node name="GameSession" type="Node" parent="." node_paths=PackedStringArray("input_router")]
+process_mode = 1
+script = ExtResource("3_session")
+tuning = ExtResource("4_tuning")
+input_router = NodePath("../InputRouter")
+
+[node name="World" type="Node3D" parent="." node_paths=PackedStringArray("session")]
+process_mode = 1
+script = ExtResource("5_world")
+session = NodePath("../GameSession")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="World"]
+
+[node name="Tunnel" type="Node3D" parent="World"]
+script = ExtResource("6_tunnel")
+
+[node name="Ball" type="Node3D" parent="World"]
+script = ExtResource("7_ball")
+
+[node name="Mesh" type="MeshInstance3D" parent="World/Ball"]
+cast_shadow = 0
+
+[node name="Camera" type="Camera3D" parent="World"]
+current = true
+near = 0.1
+far = 260.0
+script = ExtResource("8_camera")
+
+[node name="Effects" type="Node" parent="." node_paths=PackedStringArray("session", "world", "synth")]
+process_mode = 1
+script = ExtResource("9_effects")
+session = NodePath("../GameSession")
+world = NodePath("../World")
+synth = NodePath("Synth")
+
+[node name="Synth" type="Node" parent="Effects"]
+script = ExtResource("10_synth")
+
+[node name="UI" type="CanvasLayer" parent="."]
+process_mode = 3
+
+[node name="Hud" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("11_hud")
+
+[node name="Menu" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("12_menu")
+
+[node name="Pause" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("13_pause")
+
+[node name="Results" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("14_results")
