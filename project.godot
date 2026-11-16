@@ -6,9 +6,11 @@ config_version=5
 [application]
 
 config/name="Gazer"
+config/name.level_editor="Gazer Level Editor"
 config/description="Roll down a tunnel that turns around you."
 config/version="0.1.0"
 run/main_scene="res://scenes/main.tscn"
+run/main_scene.level_editor="res://src/editor/level_editor.tscn"
 config/features=PackedStringArray("4.5", "Mobile")
 config/icon="res://icon.svg"
 
@@ -30,6 +32,12 @@ window/size/viewport_height=1560
 window/size/window_width_override=390
 window/size/window_height_override=844
 window/stretch/mode="canvas_items"
+window/size/viewport_width.level_editor=1500
+window/size/viewport_height.level_editor=920
+window/size/window_width_override.level_editor=0
+window/size/window_height_override.level_editor=0
+window/stretch/mode.level_editor="disabled"
+window/dpi/allow_hidpi.level_editor=true
 window/stretch/aspect="expand"
 window/handheld/orientation=1
 window/ios/hide_home_indicator=true

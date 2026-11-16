@@ -50,6 +50,11 @@ func spin_speed_at(s: float) -> float:
 	return deg_to_rad(spin_at(s)) * tunnel_radius
 
 
+## Seconds from the start of the level to distance s.
+func time_at(s: float) -> float:
+	return SpeedProfile.time_at(s, length, base_speed, speed_ramp)
+
+
 func duration() -> float:
 	return SpeedProfile.duration(length, base_speed, speed_ramp)
 

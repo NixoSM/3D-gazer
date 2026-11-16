@@ -12,9 +12,16 @@ uniform float tunnel_radius = 4.0;
 // Holes: two RGBA float texels per hole, sorted by start:
 //   (s_start, length, angle_center, angle_width), (twist, 0, 0, 0)
 uniform sampler2D hole_data : filter_nearest, repeat_disable;
-// Which holes can touch this chunk of tube (set per chunk).
+// Which holes can touch this chunk of tube (set per chunk). The level
+// editor's 2D strip (canvas_item, no instance uniforms) defines
+// HOLES_PLAIN_UNIFORMS and sets them as ordinary uniforms instead.
+#ifdef HOLES_PLAIN_UNIFORMS
+uniform int hole_first = 0;
+uniform int hole_count = 0;
+#else
 instance uniform int hole_first = 0;
 instance uniform int hole_count = 0;
+#endif
 
 float wrap_angle(float a) {
 	return mod(a + PI, TAU) - PI;

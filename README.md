@@ -83,6 +83,7 @@ src/
   ui/            Menu, HUD, pause, results (built in code, see ui_style.gd)
   app/           Main state machine, settings and progress autoloads
   platform/      The only code that touches platform APIs (haptics, screen)
+  editor/        The desktop level editor (Windows/macOS export of this project)
 shaders/         Tunnel, ball and sky shaders
 levels/          Level JSON files + manifest.json (play order)
 resources/       ball_tuning.tres (feel), balls/*.tres (ball looks)
@@ -101,7 +102,8 @@ changes.
 
 - [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md): mechanics, numbers, feel and the visual language
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): layers, data flow, where to add things
-- [docs/LEVEL_FORMAT.md](docs/LEVEL_FORMAT.md): the level JSON, and how a future editor plugs in
+- [docs/LEVEL_EDITOR.md](docs/LEVEL_EDITOR.md): the level editor for Windows and macOS: getting it, reading it, using it
+- [docs/LEVEL_FORMAT.md](docs/LEVEL_FORMAT.md): the level JSON
 - [docs/BUILDING_IOS.md](docs/BUILDING_IOS.md): Xcode, signing, TestFlight
 - [docs/ANDROID.md](docs/ANDROID.md): what porting involves
 - [CONTRIBUTING.md](CONTRIBUTING.md): conventions and workflow
