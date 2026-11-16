@@ -32,6 +32,7 @@ is the property that makes the game safe to restyle and simple to test.
 | Presentation | `src/presentation/`, `shaders/` | core, gameplay | Reads state, never writes it. |
 | UI | `src/ui/` | presentation (for colours), `Settings` | Built in code with `UiStyle` helpers. |
 | App | `src/app/` | everything | `Main` state machine, `Settings` and `Progress` autoloads. |
+| Editor | `src/editor/` | everything (and `tools/level_generator.gd`) | The desktop level editor, a separate main scene for the `level_editor` feature tag. The game never depends on it. See LEVEL_EDITOR.md. |
 | Platform | `src/platform/` | `Settings` | The only place that calls platform APIs. |
 
 ## Coordinates
@@ -62,12 +63,31 @@ it that way: no `randf()`, no wall-clock time, no reading nodes.
 
 ## Rendering the tunnel
 
-`TunnelView` keeps geometry only around the camera: 18 m chunks from one
-chunk behind to 150 m ahead, at most two new ones built a frame.
-`TunnelMeshBuilder` lays a grid on the chunk whose lines include every
-hole edge, so each cell is entirely wall or entirely hole, then adds rim
-faces wherever wall meets hole. All chunks share one `ShaderMaterial`;
-per-frame inputs (ball position, ripples, fog colour, fade) are uniforms.
+`TunnelView` keeps geometry only around the camera: 18 m chunks (plus a
+0.3 m overlap each side, which hides the seams) from one chunk behind to
+150 m ahead, at most two new ones built a frame.
+`TunnelMeshBuilder` builds a plain tube (rows fully inside a ring hole are
+left out). Holes are cut **per pixel** in `tunnel.gdshader` from a signed
+distance field: each hole is a rounded box on the unrolled wall (sheared
+when it is twisted), and holes are combined with a smooth minimum, so
+touching holes merge without seams and every corner is rounded. The very
+same field is `LevelData.floor_distance()`, which the simulation uses to
+drop the ball and to collide it with the edge of the cut (via the field's
+gradient). Keep `HoleData.signed_distance`, `LevelData.floor_distance` and
+the shader's copies in step. The black outline is the band of floor within
+0.2 m of an edge (never under two pixels wide), so it only exists where
+there is floor. Hole parameters go to the shader in one float texture;
+each chunk gets the index range of the holes that can reach it as
+instance uniforms. The shell's thickness is drawn by a second tube at the
+shell's outer radius (`tunnel_shell.gdshader`): a pixel of it seen through
+a hole is a cut face when the view ray, sphere-traced through the shell
+from where it crossed the inner surface (inside a hole) to the outer one,
+meets solid shell on the way; a bisection finds where. Otherwise it is void.
+Steps are as long as the hole field allows, and rays beyond 22 m get a
+coarse look, because this shader is the game's most expensive part on
+views over open void (`tools/perf_probe.tscn` compares views). Both shaders share the
+field through `shaders/holes.gdshaderinc`. All chunks share one `ShaderMaterial`; per-frame inputs
+(ball position, ripples, fog colour, fade) are uniforms.
 
 The Mobile renderer is used on device. Every shader is unshaded with
 hand-written flat (cel) shading, so the look is the same on the Mobile and
@@ -79,9 +99,9 @@ a software GPU).
 | You want to… | Touch |
 |---|---|
 | Tune how the ball feels | `resources/ball_tuning.tres` in the inspector |
-| Add a level | A JSON file in `levels/` and its id in `levels/manifest.json` (see LEVEL_FORMAT.md) |
+| Add a level | Make it in the level editor (LEVEL_EDITOR.md); the JSON goes in `levels/` and its id in `levels/manifest.json` |
 | Add a hole pattern | `tools/level_generator.gd`, then re-run `tools/generate_levels.gd` |
-| Add a new obstacle type | `LevelData` + serializer (bump `format_version`), `BallSimulation`, the mesh builder or a new view, the validator, tests |
+| Add a new obstacle type | `LevelData` + serializer (bump `format_version`), `BallSimulation`, the mesh builder or a new view, the validator, the editor (`StripView` and `editor_strip.gdshader`), tests |
 | Add a ball look | Duplicate `resources/balls/classic.tres`, edit it, apply with `BallView.apply_skin()` |
 | Change sounds | `ToneSynth` (keep the `play_*` API) |
 | Change haptics | `PlatformServices.HAPTIC_PATTERNS` |

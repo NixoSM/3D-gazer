@@ -8,10 +8,14 @@ under it and it is the world that rotates. Swipe up to jump (a bigger
 swipe means a higher jump). Tap the moment you land and the ball **echoes**
 the same jump, sending a bold ring across the wall that wraps all the way
 around the tunnel and meets itself on the far side. Chain echoes and the
-notes climb a scale.
+notes climb a scale. The echo lands with a short hit-stop (swipe during it
+to change the height), and it wipes the ball's sideways momentum, so
+whatever you tilt during the freeze is where it goes.
 
-Each level is about a minute long. The ball speeds up by 20% from start to
-finish, and the tunnel's colour moves through a palette (sunrise yellows to
+The tunnel also **spins**, gently late in the first level and hard on the
+others, carrying the ball sideways: lean against it. Each level is about a
+minute long and faster than the last (13.65, 17.5 and 21 m/s at the
+start). The ball speeds up by 20% from start to finish, and the tunnel's colour moves through a palette (sunrise yellows to
 violet, sea greens to deep blue, lava yellow to red), so the colour around
 you tells you how far you are and the colour ahead shows what is coming.
 The look is a deliberate throwback to Flash games: flat colours, hard
@@ -26,7 +30,7 @@ shading, thick black outlines.
 | Engine | Godot 4.5 (GDScript), Mobile renderer |
 | Platforms | iOS first. Android is an export preset away (see [docs/ANDROID.md](docs/ANDROID.md)) |
 | Content | 3 levels: Dawn, Tide, Ember |
-| Tests | 23 headless tests, including a bot that finishes every level |
+| Tests | 37 headless tests, including a bot that finishes every level, also with a human reaction delay |
 
 **What has been verified and what hasn't.** All code was written and run on
 Linux: the unit tests, the level validator and an autopilot that plays every
@@ -78,6 +82,7 @@ src/
   ui/            Menu, HUD, pause, results (built in code, see ui_style.gd)
   app/           Main state machine, settings and progress autoloads
   platform/      The only code that touches platform APIs (haptics, screen)
+  editor/        The desktop level editor (Windows/macOS export of this project)
 shaders/         Tunnel, ball and sky shaders
 levels/          Level JSON files + manifest.json (play order)
 resources/       ball_tuning.tres (feel), balls/*.tres (ball looks)
@@ -96,7 +101,8 @@ changes.
 
 - [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md): mechanics, numbers, feel and the visual language
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): layers, data flow, where to add things
-- [docs/LEVEL_FORMAT.md](docs/LEVEL_FORMAT.md): the level JSON, and how a future editor plugs in
+- [docs/LEVEL_EDITOR.md](docs/LEVEL_EDITOR.md): the level editor for Windows and macOS: getting it, reading it, using it
+- [docs/LEVEL_FORMAT.md](docs/LEVEL_FORMAT.md): the level JSON
 - [docs/BUILDING_IOS.md](docs/BUILDING_IOS.md): Xcode, signing, TestFlight
 - [docs/ANDROID.md](docs/ANDROID.md): what porting involves
 - [CONTRIBUTING.md](CONTRIBUTING.md): conventions and workflow

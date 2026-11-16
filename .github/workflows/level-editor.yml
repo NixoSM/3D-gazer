@@ -1,0 +1,90 @@
+# Builds the level editor for Windows and macOS from the same Godot project
+# as the game (export presets "Level editor (Windows)" / "(macOS)", feature
+# tag `level_editor`). Both builds come from one Linux runner.
+#
+# Download: Actions → "Level editor" → latest run → Artifacts:
+#   Gazer-Level-Editor-Windows   (GazerLevelEditor.exe, unsigned)
+#   Gazer-Level-Editor-macOS     (GazerLevelEditor.zip → "Gazer Level Editor.app", ad-hoc signed)
+# First launch of unsigned apps needs one extra click: see docs/LEVEL_EDITOR.md.
+name: Level editor
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - src/**
+      - shaders/**
+      - levels/**
+      - resources/**
+      - tools/level_generator.gd
+      - export_presets.cfg
+      - project.godot
+      - .github/workflows/level-editor.yml
+
+concurrency:
+  group: level-editor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: 4.5.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot and desktop export templates
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-linux-desktop-templates
+
+      - name: Install Godot and the Windows/macOS templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot
+          curl -sSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+          curl -sSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          # Only what these two exports need (the full archive is ~1.3 GB).
+          unzip -q -j templates.tpz templates/windows_release_x86_64.exe templates/macos.zip templates/version.txt -d "$dest"
+          rm godot.zip templates.tpz
+
+      - name: Import
+        run: ~/godot/godot --headless --import || true
+
+      - name: Export Windows and macOS
+        run: |
+          set -euo pipefail
+          mkdir -p build/editor-windows build/editor-macos
+          ~/godot/godot --headless --export-release "Level editor (Windows)" build/editor-windows/GazerLevelEditor.exe
+          ~/godot/godot --headless --export-release "Level editor (macOS)" build/editor-macos/GazerLevelEditor.zip
+          test -s build/editor-windows/GazerLevelEditor.exe
+          unzip -l build/editor-macos/GazerLevelEditor.zip | grep -q "Gazer Level Editor.app/Contents/MacOS/"
+          ls -lh build/editor-windows build/editor-macos
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gazer-Level-Editor-Windows
+          path: build/editor-windows/GazerLevelEditor.exe
+          retention-days: 30
+
+      # Uploaded as the zip Godot made, so the .app keeps its executable bit
+      # and signature (artifact zips do not preserve file permissions).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gazer-Level-Editor-macOS
+          path: build/editor-macos/GazerLevelEditor.zip
+          compression-level: 0
+          retention-days: 30

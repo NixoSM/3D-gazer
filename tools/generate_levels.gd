@@ -13,6 +13,7 @@ const OUTPUT_DIR := "res://levels/"
 func _init() -> void:
 	var tuning: BallTuning = load("res://resources/ball_tuning.tres")
 	var generator := LevelGenerator.new()
+	generator.verbose = "--verbose" in OS.get_cmdline_user_args()
 	var manifest := []
 	for spec in _specs():
 		var level := generator.generate(spec, tuning)
@@ -23,8 +24,9 @@ func _init() -> void:
 			quit(1)
 			return
 		var problems := LevelValidator.check(level, tuning)
-		print("%s  %d holes  %.0f m  %.1f s%s" % [path, level.holes.size(), level.length, level.duration(),
-			"" if problems.is_empty() else "  WARN " + "; ".join(problems)])
+		var unused := "" if generator.script_end == INF else "  (script ran out at %.0f%%)" % (100.0 * generator.script_end / level.length)
+		print("%s  %d holes  %d spin keys  %.0f m  %.1f s  %d/%d sections%s%s" % [path, level.holes.size(), level.spin.size(), level.length,
+			level.duration(), generator.sections_used, spec.sections.size(), unused, "" if problems.is_empty() else "  WARN " + "; ".join(problems)])
 		manifest.append(level.id)
 	var file := FileAccess.open(OUTPUT_DIR + "manifest.json", FileAccess.WRITE)
 	file.store_string(JSON.stringify({"levels": manifest}, "  ") + "\n")
@@ -41,16 +43,41 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	# Palettes: `wall` is the tunnel's flat colour and carries the progress,
 	# `void` is the background seen through holes (keep it in strong contrast
 	# with the wall), `accent` colours echo rings and the best-run marker.
-	# Speeds are the original 10.5 / 11.5 / 12.5 m/s, all +30%.
+	#
+	# Sections: p = pattern, n = count, i = intensity (0..1), spin = ground
+	# spin in °/s from there on (ramp = seconds to reach it), rest = seconds
+	# of floor after. See LevelGenerator.Spec.
 
-	# 1. Sunrise: the gentle one.
+	# 1. Sunrise: learn each idea alone, then a first taste of spin.
 	var dawn := LevelGenerator.Spec.new()
 	dawn.id = "01_dawn"
 	dawn.display_name = "Dawn"
 	dawn.seed = 1107
 	dawn.base_speed = 13.65
-	dawn.difficulty = 0.35
-	dawn.pattern_weights = {"gate": 4.0, "ring": 2.0, "echo_run": 1.2, "bridge": 0.6}
+	# Slow, so holes are drawn bigger (easier to read from afar) and the
+	# floor between ideas is short: something to do every second.
+	dawn.intro_seconds = 2.0
+	dawn.breather = 0.6
+	dawn.hole_scale = 1.4
+	dawn.sections = [
+		{"p": "gate", "n": 3, "i": 0.1},                       # lean into the gap
+		{"p": "ring", "n": 2, "i": 0.1, "rest": 0.9},          # swipe to jump
+		{"p": "gate", "n": 2, "i": 0.25},
+		{"p": "split", "n": 1, "i": 0.25},
+		{"p": "echo_run", "n": 3, "i": 0.2, "rest": 0.9},     # tap as you land
+		{"p": "gate", "n": 3, "i": 0.3, "spin": 8.0, "ramp": 2.0},  # the tunnel starts to turn
+		{"p": "slalom", "n": 4, "i": 0.2},
+		{"p": "bridge", "n": 8, "i": 0.25},
+		{"p": "combo", "n": 1, "i": 0.25},
+		{"p": "echo_run", "n": 4, "i": 0.3, "spin": 12.0},
+		{"p": "combo", "n": 2, "i": 0.3},
+		{"p": "funnel", "n": 4, "i": 0.3},
+		{"p": "ring", "n": 2, "i": 0.4},
+		{"p": "gate", "n": 3, "i": 0.4},
+		{"p": "echo_run", "n": 5, "i": 0.4},
+		{"p": "gate", "n": 4, "i": 0.45},
+		{"p": "slalom", "n": 4, "i": 0.45},
+	]
 	dawn.palette = [
 		_stop(0.00, "#ffc93c", "#3a1c80", "#ffffff"),
 		_stop(0.35, "#ff8f3c", "#33166e", "#fff36b"),
@@ -59,13 +86,32 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	]
 	specs.append(dawn)
 
-	# 2. Into the sea: rhythm and bridges.
+	# 2. Into the sea: currents. The spin is always on and the tide turns.
 	var tide := LevelGenerator.Spec.new()
 	tide.id = "02_tide"
 	tide.display_name = "Tide"
 	tide.seed = 2214
-	tide.base_speed = 14.95
-	tide.difficulty = 0.6
+	tide.base_speed = 17.5
+	tide.intro_seconds = 2.0
+	tide.breather = 0.6
+	tide.hole_scale = 1.1
+	tide.sections = [
+		{"p": "gate", "n": 2, "i": 0.3, "spin": 15.0, "ramp": 1.5},
+		{"p": "slalom", "n": 4, "i": 0.35},
+		{"p": "ring", "n": 2, "i": 0.4},
+		{"p": "gate", "n": 2, "i": 0.4, "spin": -20.0, "ramp": 0.6},  # the tide turns
+		{"p": "pad_run", "n": 4, "i": 0.35, "rest": 0.8},
+		{"p": "corkscrew", "n": 12, "i": 0.4},
+		{"p": "combo", "n": 2, "i": 0.45},
+		{"p": "split", "n": 2, "i": 0.5, "spin": 28.0, "ramp": 0.5},
+		{"p": "funnel", "n": 5, "i": 0.5},
+		{"p": "pad_run", "n": 5, "i": 0.5},
+		{"p": "slalom", "n": 5, "i": 0.55, "spin": -30.0, "ramp": 0.8},
+		{"p": "corkscrew", "n": 14, "i": 0.55},
+		{"p": "echo_run", "n": 5, "i": 0.6},
+		{"p": "gate", "n": 4, "i": 0.6},
+		{"p": "combo", "n": 2, "i": 0.6},
+	]
 	tide.palette = [
 		_stop(0.00, "#5cf2b0", "#0c2a72", "#ffffff"),
 		_stop(0.30, "#2fd6ff", "#0b2266", "#fff36b"),
@@ -74,13 +120,33 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	]
 	specs.append(tide)
 
-	# 3. Lava: fast and tight.
+	# 3. Lava: fast, strong spin that snaps around, narrow lines, few breaks.
 	var ember := LevelGenerator.Spec.new()
 	ember.id = "03_ember"
 	ember.display_name = "Ember"
 	ember.seed = 3391
-	ember.base_speed = 16.25
-	ember.difficulty = 0.85
+	ember.base_speed = 21.0
+	ember.intro_seconds = 2.5
+	# The ball steers quicker than when Ember was first tuned: less floor
+	# between ideas keeps it the hardest of the three.
+	ember.breather = 0.75
+	ember.sections = [
+		{"p": "gate", "n": 3, "i": 0.6, "spin": 25.0, "ramp": 1.0},
+		{"p": "slalom", "n": 4, "i": 0.65},
+		{"p": "combo", "n": 2, "i": 0.65},
+		{"p": "pad_run", "n": 5, "i": 0.65, "spin": -32.0, "ramp": 0.3},   # snap reversal
+		{"p": "corkscrew", "n": 22, "i": 0.7},
+		{"p": "funnel", "n": 6, "i": 0.7},
+		{"p": "split", "n": 1, "i": 0.75, "spin": 40.0, "ramp": 0.3},
+		{"p": "bridge", "n": 16, "i": 0.75},
+		{"p": "combo", "n": 3, "i": 0.8},
+		{"p": "pad_run", "n": 6, "i": 0.8, "spin": -45.0, "ramp": 0.25},
+		{"p": "ring", "n": 3, "i": 0.85},
+		{"p": "corkscrew", "n": 24, "i": 0.85, "spin": 50.0, "ramp": 0.25},
+		{"p": "slalom", "n": 4, "i": 0.9},
+		{"p": "pad_run", "n": 5, "i": 0.9},
+		{"p": "gate", "n": 5, "i": 0.95},
+	]
 	ember.palette = [
 		_stop(0.00, "#ffe14a", "#5a0e2a", "#ffffff"),
 		_stop(0.35, "#ffa62b", "#4a0b22", "#ffffff"),

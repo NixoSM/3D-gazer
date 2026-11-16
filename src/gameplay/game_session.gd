@@ -45,8 +45,15 @@ func load_level(p_level: LevelData) -> void:
 	reset_run()
 
 
-func reset_run() -> void:
-	simulation.reset()
+## Resets to the start line, or to `start_s` (the level editor plays from
+## any point of the level).
+func reset_run(start_s: float = 0.0, start_angle: float = 0.0) -> void:
+	simulation.place(start_s, start_angle)
+	if autopilot:
+		# A fresh bot per run (same reflexes), so no stale plan carries over.
+		var delay := autopilot.steering_delay
+		autopilot = Autopilot.new(level, tuning)
+		autopilot.steering_delay = delay
 	_accumulator = 0.0
 	longest_chain = 0
 	_previous = Vector3(simulation.s, simulation.angle, simulation.height)
@@ -57,7 +64,6 @@ func start_run() -> void:
 	attempt += 1
 	running = true
 	if input_router:
-		input_router.calibrate()
 		input_router.enabled = true
 
 

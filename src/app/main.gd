@@ -26,7 +26,6 @@ var level_index := 0
 
 func _ready() -> void:
 	_load_levels()
-	session.sim_event.connect(_on_sim_event)
 	session.run_failed.connect(_on_run_failed)
 	session.run_completed.connect(_on_run_completed)
 	hud.pause_pressed.connect(_pause)
@@ -34,6 +33,8 @@ func _ready() -> void:
 	pause_screen.resume_pressed.connect(_resume)
 	pause_screen.restart_pressed.connect(func() -> void: _resume(); _retry(true))
 	pause_screen.quit_pressed.connect(_show_menu)
+	pause_screen.set_level_pressed.connect(input_router.set_level_here)
+	pause_screen.reset_level_pressed.connect(input_router.reset_level)
 	results.next_pressed.connect(func() -> void: _play_level(level_index + 1))
 	results.replay_pressed.connect(func() -> void: _play_level(level_index))
 	results.menu_pressed.connect(_show_menu)
@@ -64,6 +65,8 @@ func _apply_command_line() -> void:
 func _process(delta: float) -> void:
 	if state == State.MENU:
 		session.attract(delta)
+	elif state == State.PLAYING and session.simulation.is_alive():
+		hud.set_spin(session.simulation.spin_rate())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -164,6 +167,7 @@ func _begin_run() -> void:
 	world.tunnel.set_best_marker(_best_marker_s())
 	state = State.PLAYING
 	session.start_run()
+	hud.clear_spin()
 	var best := Progress.best_progress(levels[level_index].id)
 	var toast := levels[level_index].display_name
 	if session.attempt > 1:
@@ -181,7 +185,6 @@ func _resume() -> void:
 	get_tree().paused = false
 	pause_screen.visible = false
 	state = State.PLAYING
-	input_router.calibrate()
 
 
 ## Fade out, reset, fade in, go. `immediate` skips the hold after a fall.
@@ -199,16 +202,6 @@ func _retry(immediate: bool = false) -> void:
 
 
 # --- Session events ------------------------------------------------------------
-
-func _on_sim_event(event: BallSimulation.SimEvent) -> void:
-	match event.type:
-		BallSimulation.EventType.JUMPED:
-			if event.echo:
-				var color := world.palette.accent_at(levels[level_index].progress_at(event.s))
-				hud.show_chain(event.chain, event.perfect, color)
-		BallSimulation.EventType.CHAIN_BROKEN:
-			hud.hide_chain()
-
 
 func _on_run_failed(progress: float) -> void:
 	var level := levels[level_index]

@@ -67,9 +67,13 @@ func _process(delta: float) -> void:
 	var height := session.view_height
 	var progress := level.progress_at(s)
 	var frozen := sim.phase == BallSimulation.Phase.FALLING
+	# During the echo hit-stop everything holds still except the shockwave.
+	var held := sim.phase == BallSimulation.Phase.FROZEN
 
-	camera.update_view(delta, s, angle, height, level.tunnel_radius, progress, frozen)
-	ball.update_view(delta, s, angle, height, level.tunnel_radius, sim.forward_speed, sim.lateral_speed)
+	var speed := level.speed_at(s)
+	camera.update_view(delta, s, angle, height, level.tunnel_radius, speed, frozen or held)
+	ball.update_view(delta, s, angle, height, level.tunnel_radius,
+		0.0 if held else sim.forward_speed, 0.0 if held else sim.lateral_speed)
 	tunnel.update_view(camera.global_position.z * -1.0, s, angle, height, _time)
 
 	var void_color := palette.void_at(progress)

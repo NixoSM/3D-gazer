@@ -1,14 +1,14 @@
 class_name Hud
 extends Control
-## In-run overlay: the echo chain counter, a toast between attempts, and the
-## pause button. Deliberately sparse: progress is shown by the tunnel colour.
+## In-run overlay: the ground spin chevrons, a toast between attempts, and
+## the pause button. Deliberately sparse: progress is shown by the tunnel colour.
 
 signal pause_pressed
 
-var _chain: Label
-var _perfect: Label
+var _spin: Label
+var _spin_tween: Tween
+var _spin_shown := ""
 var _toast: Label
-var _chain_tween: Tween
 var _toast_tween: Tween
 
 
@@ -33,47 +33,48 @@ func _ready() -> void:
 	pause.pressed.connect(pause_pressed.emit)
 	top.add_child(pause)
 
+	# Ground spin: which way the tunnel is pushing the ball, and how hard.
+	_spin = UiStyle.display("", 64)
+	_spin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spin.modulate.a = 0.0
+	layout.add_child(_spin)
+
 	_toast = UiStyle.caption("", 26)
 	_toast.modulate.a = 0.0
 	layout.add_child(_toast)
 
-	var chain_gap := Control.new()
-	chain_gap.custom_minimum_size = Vector2(0, 150)
-	chain_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layout.add_child(chain_gap)
-	_chain = UiStyle.display("", 132)
-	_chain.modulate.a = 0.0
-	layout.add_child(_chain)
-	_perfect = UiStyle.caption("perfect", 26)
-	_perfect.modulate.a = 0.0
-	layout.add_child(_perfect)
 
-
-func show_chain(chain: int, perfect: bool, color: Color) -> void:
-	if chain < 2:
+## Shows the spin as chevrons pointing the way the ball is being pushed:
+## one to three of them by strength.
+func set_spin(rate: float) -> void:
+	var count := 0
+	var magnitude := absf(rate)
+	if magnitude >= 1.0:
+		count = 1 if magnitude < 20.0 else (2 if magnitude < 40.0 else 3)
+	var text := ("»" if rate > 0.0 else "«").repeat(count)
+	if text == _spin_shown:
 		return
-	_chain.text = "×%d" % chain
-	_chain.add_theme_color_override("font_color", color)
-	_chain.pivot_offset = _chain.size * 0.5
-	if _chain_tween:
-		_chain_tween.kill()
-	_chain.modulate.a = 1.0
-	_chain.scale = Vector2.ONE * 1.25
-	_perfect.modulate.a = 1.0 if perfect else 0.0
-	_chain_tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_chain_tween.tween_property(_chain, "scale", Vector2.ONE, 0.22)
-	_chain_tween.tween_interval(0.9)
-	_chain_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	_chain_tween.tween_property(_chain, "modulate:a", 0.0, 0.5)
-	_chain_tween.parallel().tween_property(_perfect, "modulate:a", 0.0, 0.3)
+	_spin_shown = text
+	if _spin_tween:
+		_spin_tween.kill()
+	_spin_tween = create_tween()
+	if text.is_empty():
+		_spin_tween.tween_property(_spin, "modulate:a", 0.0, 0.3)
+		return
+	_spin.text = text
+	_spin.pivot_offset = _spin.size * 0.5
+	_spin.scale = Vector2.ONE * 1.2
+	_spin.modulate.a = 1.0
+	_spin_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_spin_tween.tween_property(_spin, "scale", Vector2.ONE, 0.25)
+	_spin_tween.tween_property(_spin, "modulate:a", 0.9, 0.4)
 
 
-func hide_chain() -> void:
-	if _chain_tween:
-		_chain_tween.kill()
-	_chain_tween = create_tween()
-	_chain_tween.tween_property(_chain, "modulate:a", 0.0, 0.2)
-	_chain_tween.parallel().tween_property(_perfect, "modulate:a", 0.0, 0.2)
+func clear_spin() -> void:
+	_spin_shown = ""
+	if _spin_tween:
+		_spin_tween.kill()
+	_spin.modulate.a = 0.0
 
 
 func toast(text: String, seconds: float = 1.6) -> void:

@@ -1,61 +1,78 @@
 class_name HoleData
 extends RefCounted
-## A rectangular hole cut into the tunnel wall.
+## A hole cut into the tunnel wall.
 ##
 ## A hole is a rectangle in *tunnel-surface coordinates*:
 ##   s      distance along the tunnel axis, in metres
 ##   angle  position around the circumference, in radians (0 = the "floor" at level start)
-## Because the surface is a cylinder, a rectangle in (s, angle) is a curved
-## patch in 3D. Angles wrap, so a hole may straddle angle 0 / TAU.
+## optionally *twisted*: its centre line turns `twist` radians per metre along
+## the tunnel, so it becomes a slanted band (a parallelogram on the unrolled
+## wall). Corkscrews and winding bridges are one twisted hole each, so their
+## edges are straight diagonals rather than staircases of small rectangles.
+##
+## Corners are rounded (CORNER_RADIUS). The shape is defined by a signed
+## distance (signed_distance()), and *both* the simulation and the renderer
+## use that same function (the shader has a line-for-line copy), so the ball
+## falls exactly where the picture shows a hole.
+
+## Radius (m) of the rounded corners of every hole.
+const CORNER_RADIUS := 0.6
 
 ## Where the hole starts along the tunnel (metres).
 var s_start: float
 ## How long the hole is along the tunnel (metres, > 0).
 var length: float
-## Centre of the hole around the circumference (radians, wrapped to [0, TAU)).
+## Centre of the hole around the circumference at its *start* (radians, [0, TAU)).
 var angle_center: float
-## Angular width of the hole (radians, 0 < width <= TAU).
+## Angular width of the hole (radians, 0 < width <= TAU), measured around the tunnel.
 var angle_width: float
+## How fast the centre turns along the tunnel, radians per metre (0 = straight).
+var twist: float
 
 
-func _init(p_s_start: float = 0.0, p_length: float = 1.0, p_angle_center: float = 0.0, p_angle_width: float = PI / 4.0) -> void:
+func _init(p_s_start: float = 0.0, p_length: float = 1.0, p_angle_center: float = 0.0, p_angle_width: float = PI / 4.0, p_twist: float = 0.0) -> void:
 	s_start = p_s_start
 	length = p_length
 	angle_center = TunnelMath.wrap_angle_positive(p_angle_center)
 	angle_width = p_angle_width
+	twist = p_twist
 
 
 func s_end() -> float:
 	return s_start + length
 
 
-## True if the surface point (s, angle) is inside this hole after shrinking
-## the hole by `margin_s` metres along the tunnel and `margin_arc` metres
-## around the circumference (positive margins forgive near-misses).
-func contains(s: float, angle: float, radius: float, margin_s: float = 0.0, margin_arc: float = 0.0) -> bool:
-	if s < s_start + margin_s or s > s_end() - margin_s:
-		return false
-	var half_width := angle_width * 0.5 - margin_arc / radius
-	if half_width <= 0.0:
-		return false
-	return absf(TunnelMath.angle_difference(angle, angle_center)) <= half_width
+## A full ring: every angle is open, so only the ends are edges.
+func is_ring() -> bool:
+	return angle_width >= TAU - 0.0001
 
 
-## Returns the hole as one or two non-wrapping angle ranges [a0, a1] inside
-## [0, TAU]. Mesh building wants ranges that never cross the seam.
-func angle_ranges() -> Array[Vector2]:
-	var ranges: Array[Vector2] = []
-	if angle_width >= TAU:
-		ranges.append(Vector2(0.0, TAU))
-		return ranges
-	var a0 := angle_center - angle_width * 0.5
-	var a1 := angle_center + angle_width * 0.5
-	if a0 < 0.0:
-		ranges.append(Vector2(0.0, a1))
-		ranges.append(Vector2(a0 + TAU, TAU))
-	elif a1 > TAU:
-		ranges.append(Vector2(a0, TAU))
-		ranges.append(Vector2(0.0, a1 - TAU))
-	else:
-		ranges.append(Vector2(a0, a1))
-	return ranges
+## Centre angle at distance s along the tunnel.
+func center_at(s: float) -> float:
+	return angle_center + twist * (s - s_start)
+
+
+## Signed distance (m, measured on the wall) from the surface point to the
+## hole's edge: negative inside the hole, positive outside.
+##
+## The hole is a rounded box in sheared coordinates (arc relative to the
+## twisted centre line, s relative to the middle); the arc part is scaled by
+## cos(slant) so distances to the slanted sides are true perpendicular ones.
+func signed_distance(s: float, angle: float, radius: float) -> float:
+	var half_length := length * 0.5
+	var y := absf(s - (s_start + half_length)) - half_length
+	if is_ring():
+		return y
+	var slope := twist * radius
+	var slant := 1.0 / sqrt(1.0 + slope * slope)
+	var x := (absf(TunnelMath.angle_difference(angle, center_at(s))) * radius - angle_width * 0.5 * radius) * slant
+	var corner := minf(CORNER_RADIUS, minf(angle_width * 0.5 * radius * slant, half_length) * 0.9)
+	var qx := x + corner
+	var qy := y + corner
+	return Vector2(maxf(qx, 0.0), maxf(qy, 0.0)).length() + minf(maxf(qx, qy), 0.0) - corner
+
+
+## True if the surface point is inside this hole alone, ignoring neighbours,
+## shrunk by `margin` metres (positive margins forgive near-misses).
+func contains(s: float, angle: float, radius: float, margin: float = 0.0) -> bool:
+	return signed_distance(s, angle, radius) < -margin

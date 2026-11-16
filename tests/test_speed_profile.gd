@@ -19,3 +19,13 @@ func test_simulated_run_matches_analytic_duration() -> void:
 	while sim.phase != BallSimulation.Phase.FINISHED:
 		sim.step(dt, InputFrame.new())
 	assert_near(sim.time, level.duration(), 0.05)
+
+
+func test_time_at_matches_duration_and_simulation() -> void:
+	var level := make_level()
+	assert_near(level.time_at(0.0), 0.0, 0.0001)
+	assert_near(level.time_at(level.length), level.duration(), 0.0001)
+	var sim := BallSimulation.new(level, make_tuning())
+	while sim.s < 250.0:
+		sim.step(1.0 / 120.0, InputFrame.new())
+	assert_near(level.time_at(sim.s), sim.time, 0.02)
