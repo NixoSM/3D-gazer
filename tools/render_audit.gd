@@ -42,6 +42,21 @@ func _run() -> void:
 		await _frames(12)
 		await _shot("L%d_mid" % (index + 1))
 
+	# An echo run (rings in a row), seen from the floor before it: the cut
+	# faces of ring ends are seen head-on here, at many distances.
+	_main._play_level(0)
+	await _frames(3)
+	session.stop_run()
+	var previous_ring: HoleData = null
+	for hole in session.level.holes:
+		if hole.is_ring():
+			if previous_ring and hole.s_start - previous_ring.s_end() < 8.0:
+				_place(session, world, previous_ring.s_start - 5.0, 0.0)
+				await _frames(12)
+				await _shot("L1_echo_run")
+				break
+			previous_ring = hole
+
 	# Twisted holes (corkscrews and bridges), seen from just before them.
 	_main._play_level(2)
 	await _frames(3)

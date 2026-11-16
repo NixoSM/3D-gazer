@@ -29,6 +29,23 @@ uniform vec3 fade_color : source_color = vec3(0.0);
 
 varying vec3 world_pos;
 
+
+// The floor tiles' seams in one direction only (see tile_box() for the
+// layout): < 0 in a seam. `across` = the seams around the tunnel (lines
+// along it); otherwise the seams across it.
+float tile_seam(float u, float v, bool across, out vec2 tile) {
+	float tile_v = TAU * tunnel_radius / 10.0;
+	float tile_u = band_length * 1.3;
+	float row = floor(u / tile_u);
+	float shifted = v + mod(row, 2.0) * tile_v * 0.5;
+	tile = vec2(row, floor(shifted / tile_v));
+	float half_seam = 0.09;
+	if (across) {
+		return tile_v * 0.5 - abs(mod(shifted, tile_v) - tile_v * 0.5) - half_seam;
+	}
+	return tile_u * 0.5 - abs(mod(u, tile_u) - tile_u * 0.5) - half_seam;
+}
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -63,7 +80,7 @@ void fragment() {
 	// and those grazing rays are the longest (and costliest) to trace.
 	float view_distance = length(world_pos - camera);
 	int steps = view_distance < 22.0 ? 12 : 4;
-	int refine = view_distance < 22.0 ? 10 : 3;
+	int refine = 10;  // stops early once within 1 cm (see below)
 	for (int i = 0; i < steps; i++) {
 		// smooth_min() makes d up to BLEND/4 more negative than the true
 		// distance near blended holes, hence the margin; never crawl.
@@ -124,10 +141,19 @@ void fragment() {
 		color = mix(color, wall * (face_shade - 0.22), (1.0 - smoothstep(0.035 - w, 0.035 + w, band)) * fade_far);
 	}
 	if (face_style == 1 || face_style == 3) {
-		// Blocks: the floor tiles' seams carry on down the face.
+		// Blocks: the floor tiles' seams carry on down the face. Only the
+		// seams that cross the face are drawn: on the end of a ring (a face
+		// across the tunnel) the seams around the tunnel, on the side of a
+		// gap (a face along it) the seams across. A seam running along the
+		// face would cover it, or not, depending on where exactly the ray
+		// hit, and smeared into streaks.
 		vec2 tile;
 		float v = wrap_angle(hit_angle) * tunnel_radius + PI * tunnel_radius;
-		float seam = tile_box(s, v, band_length, tile);
+		const float EPS = 0.03;
+		float gs = floor_distance(s + EPS, hit_angle) - floor_distance(s - EPS, hit_angle);
+		float ga = floor_distance(s, hit_angle + EPS / tunnel_radius) - floor_distance(s, hit_angle - EPS / tunnel_radius);
+		bool across = abs(gs) > abs(ga);  // the face's normal points along the tunnel
+		float seam = tile_seam(s, v, across, tile);
 		float w = max(fwidth(seam), 0.0001);
 		float in_seam = 1.0 - smoothstep(-w, w, seam);
 		color = mix(color, wall * (face_shade - 0.25), in_seam * fade_far);
