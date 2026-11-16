@@ -353,10 +353,10 @@ func _build_spin(column: VBoxContainer) -> void:
 	_spin_direction = OptionButton.new()
 	for name in DIRECTIONS:
 		_spin_direction.add_item(name)
-	_spin_direction.item_selected.connect(func(_index: int) -> void: _spin_changed())
+	_spin_direction.item_selected.connect(func(_index: int) -> void: _spin_changed("direction"))
 	grid.add_child(_spin_direction)
-	_spin_rate = _number_row(grid, "Speed (°/s)", 0.0, 180.0, 1.0, func(_v: float) -> void: _spin_changed())
-	_spin_ramp = _number_row(grid, "Speeds up by (%)", 0.0, 300.0, 1.0, func(_v: float) -> void: _spin_changed())
+	_spin_rate = _number_row(grid, "Speed (°/s)", 0.0, 180.0, 1.0, func(_v: float) -> void: _spin_changed("rate"))
+	_spin_ramp = _number_row(grid, "Speeds up by (%)", 0.0, 300.0, 1.0, func(_v: float) -> void: _spin_changed("ramp"))
 	_spin_note = EditorTheme.note("")
 	column.add_child(_spin_note)
 
@@ -377,12 +377,25 @@ func _refresh_spin() -> void:
 	var level := document.level
 	var start := level.spin_at(0.0)
 	var end := level.spin_at(level.length)
-	var reference := start if absf(start) > 0.01 else end
+	var reference := start
+	for key in level.spin:
+		if absf(reference) > 0.01:
+			break
+		reference = key.rate
 	_updating = true
 	_spin_direction.selected = 0 if absf(reference) < 0.01 else (1 if reference < 0.0 else 2)
-	_spin_rate.value = absf(start)
-	_spin_ramp.value = 0.0 if absf(start) < 0.01 else maxf((absf(end) / absf(start) - 1.0) * 100.0, 0.0)
+	# A generator spin starts at 0 °/s and changes along the way: show the
+	# first speed it reaches rather than a misleading 0.
+	_spin_rate.value = absf(reference)
+	_spin_ramp.value = 0.0 if absf(start) < 0.01 or not _spin_is_simple(level) else maxf((absf(end) / absf(start) - 1.0) * 100.0, 0.0)
 	_updating = false
+	_update_spin_note()
+
+
+func _update_spin_note() -> void:
+	var level := document.level
+	var start := level.spin_at(0.0)
+	var end := level.spin_at(level.length)
 	if _spin_is_simple(level):
 		_spin_note.text = "" if level.spin.is_empty() else "From %.0f to %.0f °/s by the finish." % [absf(start), absf(end)]
 	else:
@@ -393,13 +406,23 @@ func _refresh_spin() -> void:
 		_spin_note.text = "This level's spin was made by the generator: it changes %d times along the way%s. Changing any field above replaces it with one steady spin." % [level.spin.size() - 1, (", %d of them switching direction" % flips) if flips > 0 else ""]
 
 
-func _spin_changed() -> void:
+## field: which one the person changed ("direction", "rate" or "ramp").
+func _spin_changed(field: String) -> void:
 	if _updating:
 		return
+	# A direction without a speed, or a speed without a direction, would be
+	# no spin at all: fill in the missing half instead of ignoring the edit.
+	# (The fields keep what was typed; only the level follows them.)
+	_updating = true
+	if field == "direction" and _spin_direction.selected != 0 and is_zero_approx(_spin_rate.value):
+		_spin_rate.value = 20.0
+	elif field == "rate" and _spin_direction.selected == 0 and _spin_rate.value > 0.0:
+		_spin_direction.select(2)
+	_updating = false
 	document.begin("Change spin", true)
 	_apply_spin(document.level)
 	document.changed_from(0.0)
-	_refresh_spin()
+	_update_spin_note()
 
 
 func _apply_spin(level: LevelData) -> void:
@@ -490,6 +513,8 @@ func _number_row(grid: GridContainer, text: String, low: float, high: float, ste
 	box.step = step
 	box.custom_minimum_size = Vector2(120, 0)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Apply while typing, not only on Enter or when the field loses focus.
+	box.update_on_text_changed = true
 	box.value_changed.connect(apply)
 	grid.add_child(box)
 	return box
