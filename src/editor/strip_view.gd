@@ -301,15 +301,6 @@ func _handle_at(point: Vector2) -> String:
 	return ""
 
 
-func _spin_key_at(point: Vector2) -> int:
-	var lv := level()
-	for i in lv.spin.size():
-		var key := lv.spin[i]
-		if Vector2(_rate_to_x(key.rate), s_to_y(key.s)).distance_to(point) <= HANDLE + 2.0:
-			return i
-	return -1
-
-
 func _spin_range() -> float:
 	var top := 60.0
 	for key in level().spin:
@@ -381,40 +372,19 @@ func _mouse_button(event: InputEventMouseButton) -> void:
 		play_requested.emit(maxf(y_to_s(event.position.y), 0.0), x_to_angle(event.position.x))
 		return
 	if _spin_rect.has_point(event.position):
-		_press_spin(event.position)
+		status.emit("Set the spin in the inspector's Spin section: direction, speed and how much it speeds up.")
 	elif _strip_rect.has_point(event.position):
 		_press_strip(event.position, event.shift_pressed, command)
 
 
 func _right_click(point: Vector2) -> void:
 	if _spin_rect.has_point(point):
-		var key := _spin_key_at(point)
-		if key >= 0:
-			document.begin("Delete spin key")
-			var s := level().spin[key].s
-			level().spin.remove_at(key)
-			document.changed_from(s)
-			status.emit("Spin key removed.")
 		return
 	var hole := hole_at_point(point)
 	if hole:
 		if not hole in selection:
 			selection = [hole]
 		delete_selection()
-
-
-func _press_spin(point: Vector2) -> void:
-	var key := _spin_key_at(point)
-	var lv := level()
-	if key < 0:
-		document.begin("Add spin key")
-		var new_key := SpinKey.new(clampf(_snap_s(y_to_s(point.y), true), 0.0, lv.length), snappedf(_x_to_rate(point.x), 5.0))
-		lv.spin.append(new_key)
-		document.changed_from(new_key.s)
-		_drag = {"mode": "spin", "key": new_key, "begun": true}
-		status.emit("Spin key added. Drag to adjust, right-click to remove.")
-	else:
-		_drag = {"mode": "spin", "key": lv.spin[key], "begun": false}
 
 
 func _press_strip(point: Vector2, shift: bool, command: bool) -> void:
@@ -492,16 +462,6 @@ func _drag_to(point: Vector2) -> void:
 			if absf(point.x - from.x) > 4.0:
 				follow_route = false
 			_clamp_view()
-		"spin":
-			if not _drag["begun"]:
-				document.begin("Move spin key")
-				_drag["begun"] = true
-			var key: SpinKey = _drag["key"]
-			var old_s := key.s
-			key.s = clampf(_snap_s(s, true), 0.0, lv.length)
-			key.rate = clampf(snappedf(_x_to_rate(point.x), 1.0 if Input.is_key_pressed(KEY_ALT) else 5.0), -180.0, 180.0)
-			document.changed_from(minf(old_s, key.s) - 30.0)
-			status.emit("Spin %+.0f °/s at %.1f m" % [key.rate, key.s])
 		"move":
 			var from: Vector2 = _drag["from"]
 			if not _drag["begun"] and from.distance_to(point) < 4.0:
@@ -632,7 +592,7 @@ func _cancel_drag() -> void:
 
 func _update_cursor_shape() -> void:
 	if _spin_rect.has_point(_mouse):
-		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if _spin_key_at(_mouse) >= 0 else Control.CURSOR_CROSS
+		mouse_default_cursor_shape = Control.CURSOR_ARROW
 		return
 	if not _strip_rect.has_point(_mouse):
 		mouse_default_cursor_shape = Control.CURSOR_ARROW
@@ -820,10 +780,6 @@ func _draw_spin_lane(lv: LevelData) -> void:
 		s += step
 	if curve.size() >= 2:
 		draw_polyline(curve, EditorTheme.INK, 3.5, true)
-	for key in lv.spin:
-		var p := Vector2(_rate_to_x(key.rate), s_to_y(key.s))
-		draw_circle(p, HANDLE, EditorTheme.INK)
-		draw_circle(p, HANDLE - 3.0, EditorTheme.ACTIVE)
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x, 46)), EditorTheme.PAPER)
 	_text(rect.position + Vector2(10, 20), "SPIN", 16, EditorTheme.INK)
 	_text(rect.position + Vector2(10, 38), "±%d °/s" % int(range_top), 12, EditorTheme.MUTED)

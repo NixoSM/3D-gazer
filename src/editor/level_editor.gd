@@ -312,12 +312,12 @@ func _help_text() -> String:
 • Three bots play it after every edit: [color=#00b4d8]instant[/color], [color=#7b2ff7]quick (0.2 s)[/color] and [color=#ff4f79]relaxed (0.35 s)[/color]. Solid = rolling, dotted = flying, ✕ = where it falls. If the relaxed bot gets through, most people will.
 • Every stretch you must jump gets a bracket: green is fine, orange is close to the limit or has no run-up, red cannot be jumped.
 • Under the mouse, the white cone is where a rolling ball can steer to in 1.2 s (the dashed line is hands off, so you see the spin push). The yellow bar is where the smallest and biggest jumps land.
-• The left ruler counts seconds of play; the right lane is the spin.
+• The left ruler counts seconds of play; the lane right of the strip graphs the spin (set it in the inspector).
 
 [b]Editing[/b]  V select · H draw a hole · R place a ring
 Drag a hole to move it, the yellow squares to resize, the pink dot to twist it. Shift-click or drag a box to select several. %s-drag copies. Alt (Option) turns snapping off.
 %s+D repeats the selection further on · M mirrors it · Delete removes · arrows nudge (Shift = more)
-Spin lane: click to add a key, drag it, right-click to remove.
+Spin: in the inspector, a direction, a speed and how much it speeds up by the finish.
 Scroll to move · %s+scroll to zoom · Shift+scroll to turn the tunnel · middle-drag to pan.
 
 [b]Playing[/b]  Double-click anywhere on the strip to play from there. F5 plays from the start, B lets the quick bot play from the mouse. A/D or arrows tilt, W hops, Space jumps big, E echoes, Esc stops. A fall is marked on the strip and you restart from the same spot.

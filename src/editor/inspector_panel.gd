@@ -23,6 +23,10 @@ var _selection_note: Label
 var _level_fields := {}
 var _duration_note: Label
 var _palette_box: VBoxContainer
+var _spin_direction: OptionButton
+var _spin_rate: SpinBox
+var _spin_ramp: SpinBox
+var _spin_note: Label
 var _pattern: OptionButton
 var _pattern_count: SpinBox
 var _pattern_intensity: HSlider
@@ -45,6 +49,7 @@ func setup(p_document: LevelDocument, p_strip: StripView, p_analysis: LevelAnaly
 	_build_selection(column)
 	_build_pattern(column)
 	_build_level(column)
+	_build_spin(column)
 	_build_palette(column)
 
 
@@ -290,6 +295,7 @@ func _set_level_value(value: float, key: String) -> void:
 		return
 	var level := document.level
 	document.begin("Edit level " + key, true)
+	var simple := _spin_is_simple(level)
 	match key:
 		"base_speed":
 			level.base_speed = value
@@ -300,6 +306,8 @@ func _set_level_value(value: float, key: String) -> void:
 			for hole in level.holes:
 				last = maxf(last, hole.s_end())
 			level.length = maxf(value, last)
+	if key == "length" and simple:
+		_apply_spin(level)
 	document.changed_from(0.0)
 	_update_duration()
 
@@ -323,7 +331,85 @@ func refresh_level() -> void:
 	(_level_fields["length"] as SpinBox).value = level.length
 	_updating = false
 	_update_duration()
+	_refresh_spin()
 	_rebuild_palette()
+
+
+# --- Spin ------------------------------------------------------------------------------
+# Ground spin, set like the speed: a direction, how fast at the start, and how
+# much faster by the end. Stored as two spin keys (start and finish), so the
+# level format and the game are unchanged.
+
+const DIRECTIONS := ["None", "Left", "Right"]
+
+
+func _build_spin(column: VBoxContainer) -> void:
+	column.add_child(EditorTheme.heading("SPIN"))
+	column.add_child(EditorTheme.note("How fast the tunnel turns, pushing the ball sideways unless the player leans against it."))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	column.add_child(grid)
+	grid.add_child(_label("Direction"))
+	_spin_direction = OptionButton.new()
+	for name in DIRECTIONS:
+		_spin_direction.add_item(name)
+	_spin_direction.item_selected.connect(func(_index: int) -> void: _spin_changed())
+	grid.add_child(_spin_direction)
+	_spin_rate = _number_row(grid, "Speed (°/s)", 0.0, 180.0, 1.0, func(_v: float) -> void: _spin_changed())
+	_spin_ramp = _number_row(grid, "Speeds up by (%)", 0.0, 300.0, 1.0, func(_v: float) -> void: _spin_changed())
+	_spin_note = EditorTheme.note("")
+	column.add_child(_spin_note)
+
+
+## True if the level's spin is what these three fields can express: one
+## direction, changing evenly from start to finish (or none at all).
+static func _spin_is_simple(level: LevelData) -> bool:
+	if level.spin.is_empty():
+		return true
+	if level.spin.size() > 2:
+		return false
+	var a := level.spin[0]
+	var b := level.spin[level.spin.size() - 1]
+	return a.s <= 0.01 and (level.spin.size() == 1 or absf(b.s - level.length) < 0.01) and a.rate * b.rate >= 0.0
+
+
+func _refresh_spin() -> void:
+	var level := document.level
+	var start := level.spin_at(0.0)
+	var end := level.spin_at(level.length)
+	var reference := start if absf(start) > 0.01 else end
+	_updating = true
+	_spin_direction.selected = 0 if absf(reference) < 0.01 else (1 if reference < 0.0 else 2)
+	_spin_rate.value = absf(start)
+	_spin_ramp.value = 0.0 if absf(start) < 0.01 else maxf((absf(end) / absf(start) - 1.0) * 100.0, 0.0)
+	_updating = false
+	if _spin_is_simple(level):
+		_spin_note.text = "" if level.spin.is_empty() else "From %.0f to %.0f °/s by the finish." % [absf(start), absf(end)]
+	else:
+		var flips := 0
+		for i in range(1, level.spin.size()):
+			if level.spin[i].rate * level.spin[i - 1].rate < 0.0:
+				flips += 1
+		_spin_note.text = "This level's spin was made by the generator: it changes %d times along the way%s. Changing any field above replaces it with one steady spin." % [level.spin.size() - 1, (", %d of them switching direction" % flips) if flips > 0 else ""]
+
+
+func _spin_changed() -> void:
+	if _updating:
+		return
+	document.begin("Change spin", true)
+	_apply_spin(document.level)
+	document.changed_from(0.0)
+	_refresh_spin()
+
+
+func _apply_spin(level: LevelData) -> void:
+	var sign: float = [0.0, -1.0, 1.0][_spin_direction.selected]
+	var start: float = sign * _spin_rate.value
+	if is_zero_approx(start):
+		level.spin = []
+		return
+	var end := clampf(start * (1.0 + _spin_ramp.value / 100.0), -180.0, 180.0)
+	level.spin = [SpinKey.new(0.0, start), SpinKey.new(level.length, end)]
 
 
 # --- Colours ---------------------------------------------------------------------------

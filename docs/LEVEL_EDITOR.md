@@ -134,10 +134,14 @@ floor there is under 1.8 m (the ball is 0.84 m wide).
   biggest jump lands.
 - The readout gives distance, time, angle and spin there.
 
-**The spin lane** shows the ground spin along the level: right of the centre
-line pushes the ball right. Click to add a key, drag keys, right-click to
-remove one. Between keys the spin changes gradually; two keys close together
-make a sudden switch.
+**The spin lane** graphs the ground spin along the level: right of the centre
+line pushes the ball right, left pushes it left. You set the spin in the
+inspector's **Spin** section, like the speed: a direction (left, right or
+none), a speed in degrees per second at the start, and how much faster it
+gets by the finish. (It is saved as two spin keys, start and finish, so the
+level format is unchanged. The bundled levels were made by the generator,
+whose spin changes and switches direction section by section; changing the
+Spin fields replaces that with one steady spin.)
 
 **The minimap** (far left) is the whole level: problems in red, where the
 bots fall, and the yellow box is what the strip shows. Click or drag on it

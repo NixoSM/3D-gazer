@@ -64,6 +64,17 @@ func _run() -> void:
 	await _frames(3)
 	await _shot("editor_selected")
 
+	# The spin, set like the speed: right, 30 °/s, +50% by the finish.
+	var inspector := _editor._inspector
+	inspector._spin_direction.select(2)
+	inspector._spin_rate.value = 30.0
+	inspector._spin_ramp.value = 50.0
+	inspector._spin_changed()
+	var scroll: ScrollContainer = inspector.get_child(0)
+	scroll.ensure_control_visible(inspector._spin_note)
+	await _frames(5)
+	await _shot("editor_spin")
+
 	var start := focus - 30.0
 	var start_angle := _editor.analysis.bots[1].angle_at(start)
 	_editor._play(start, 0.0 if is_nan(start_angle) else start_angle, 0.2)
