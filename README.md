@@ -15,7 +15,7 @@ whatever you tilt during the freeze is where it goes.
 The tunnel also **spins**, gently late in the first level and hard on the
 others, carrying the ball sideways: lean against it. Spin is set per
 level, like speed, and is the main difficulty dial. Each level is about a
-minute long and faster than the last (13.65, 17.5 and 21 m/s at the
+minute long and faster than the last (20, 23.2 and 27 m/s at the
 start). The ball speeds up by 20% from start to finish, and the tunnel's colour moves through a palette (sunrise yellows to
 violet, sea greens to deep blue, lava yellow to red), so the colour around
 you tells you how far you are and the colour ahead shows what is coming.
@@ -31,7 +31,7 @@ shading, thick black outlines.
 | Engine | Godot 4.5.1 (GDScript), Mobile renderer |
 | Platforms | iOS first. Android is an export preset away (see [docs/ANDROID.md](docs/ANDROID.md)) |
 | Levels in the game | Dawn, Tide, Ember (`levels/manifest.json`) |
-| Levels in the folder only | `new_level` (30 m/s, about 45 s): not in the manifest yet, see [Adding a level](#adding-a-level) |
+| Levels in the folder only | `custom_level_test` (30 m/s, about 42 s): not in the manifest yet, the bots cannot finish it, see [Adding a level](#adding-a-level) |
 | Level editor | Desktop app for Windows and macOS, built from this same project |
 | Tests | Headless suite, including a bot that finishes every level with a human reaction delay |
 
@@ -85,11 +85,6 @@ these steps exist.
 **F6**, or `godot --path . res://src/editor/level_editor.tscn`. Run this way
 it edits the repository's own `levels/` folder; the downloaded app uses a
 **Gazer Levels** folder in Documents instead.
-
-> **Waiting on PR #5.** On `main` today, the inspector's **Spin** fields
-> can snap back and not apply, and the bots can cut across holes when
-> lining up after a ring (so they fail `new_level`). PR #5 fixes both. The
-> descriptions here and in the editor guide assume it is merged.
 
 ## Adding a level
 
