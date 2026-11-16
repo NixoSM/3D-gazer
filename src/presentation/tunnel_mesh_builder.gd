@@ -17,12 +17,13 @@ const ROW_LENGTH := 1.5
 const SKIRT := 0.3
 
 
-static func build_chunk(level: LevelData, chunk_start: float, chunk_end: float) -> ArrayMesh:
+## `radius_offset` builds the shell's outer surface (TunnelView's cut faces).
+static func build_chunk(level: LevelData, chunk_start: float, chunk_end: float, radius_offset: float = 0.0) -> ArrayMesh:
 	# Chunks before s = 0 exist too: the camera starts behind the ball and
 	# must not see the open end of the tube.
 	var s0 := chunk_start - SKIRT
 	var s1 := chunk_end + SKIRT
-	var radius := level.tunnel_radius
+	var radius := level.tunnel_radius + radius_offset
 	var rings := _ring_spans(level, s0, s1)
 
 	var vertices := PackedVector3Array()

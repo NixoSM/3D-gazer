@@ -21,23 +21,13 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
 
 const int MAX_RIPPLES = 6;
-// Keep in step with HoleData.CORNER_RADIUS and LevelData.BLEND.
-const float CORNER_RADIUS = 0.6;
-const float BLEND = 1.2;
-const float REACH = BLEND + CORNER_RADIUS + 1.0;
+
+#include "res://shaders/holes.gdshaderinc"
 
 uniform sampler2D wall_gradient : source_color, filter_linear, repeat_disable;
 uniform sampler2D accent_gradient : source_color, filter_linear, repeat_disable;
 uniform float level_length = 600.0;
-uniform float tunnel_radius = 4.0;
 uniform vec3 outline_color : source_color = vec3(0.04, 0.03, 0.06);
-
-// Holes: two RGBA float texels per hole, sorted by start:
-//   (s_start, length, angle_center, angle_width), (twist, 0, 0, 0)
-uniform sampler2D hole_data : filter_nearest, repeat_disable;
-// Which holes can touch this chunk of tube (set per chunk).
-instance uniform int hole_first = 0;
-instance uniform int hole_count = 0;
 
 // Look
 uniform int pattern = 1;               // 0 bands, 1 tiles, 2 stripes, 3 diamonds, 4 plain
@@ -65,10 +55,6 @@ uniform vec3 fade_color : source_color = vec3(0.0);
 
 varying vec3 world_pos;
 
-float wrap_angle(float a) {
-	return mod(a + PI, TAU) - PI;
-}
-
 // Distance between two points on the cylinder surface, the short way round.
 float surface_distance(float s0, float a0, float s1, float a1) {
 	return length(vec2(s1 - s0, tunnel_radius * wrap_angle(a1 - a0)));
@@ -78,43 +64,6 @@ float surface_distance(float s0, float a0, float s1, float a1) {
 float inside(float value, float threshold) {
 	float w = max(fwidth(value), 0.0001);
 	return 1.0 - smoothstep(threshold - w, threshold + w, value);
-}
-
-// HoleData.signed_distance
-float hole_distance(vec4 a, float twist, float s, float angle) {
-	float half_length = a.y * 0.5;
-	float y = abs(s - (a.x + half_length)) - half_length;
-	if (a.w >= TAU - 0.0001) {
-		return y;
-	}
-	float slope = twist * tunnel_radius;
-	float slant = 1.0 / sqrt(1.0 + slope * slope);
-	float half_width = a.w * 0.5 * tunnel_radius;
-	float x = (abs(wrap_angle(angle - (a.z + twist * (s - a.x)))) * tunnel_radius - half_width) * slant;
-	float corner = min(CORNER_RADIUS, min(half_width * slant, half_length) * 0.9);
-	vec2 q = vec2(x, y) + corner;
-	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - corner;
-}
-
-// LevelData.smooth_min
-float smooth_min(float a, float b) {
-	float h = max(BLEND - abs(a - b), 0.0) / BLEND;
-	return min(a, b) - h * h * BLEND * 0.25;
-}
-
-// LevelData.floor_distance: > 0 on floor, < 0 over a hole.
-float floor_distance(float s, float angle) {
-	float d = 1e6;
-	for (int i = 0; i < hole_count; i++) {
-		int index = (hole_first + i) * 2;
-		vec4 a = texelFetch(hole_data, ivec2(index, 0), 0);
-		if (a.x > s + REACH || a.x + a.y < s - REACH) {
-			continue;
-		}
-		float twist = texelFetch(hole_data, ivec2(index + 1, 0), 0).x;
-		d = smooth_min(d, hole_distance(a, twist, s, angle));
-	}
-	return d;
 }
 
 // The floor's own look, before shading. `u` runs along the tunnel, `v`

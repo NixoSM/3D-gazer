@@ -77,7 +77,11 @@ the shader's copies in step. The black outline is the band of floor within
 0.2 m of an edge (never under two pixels wide), so it only exists where
 there is floor. Hole parameters go to the shader in one float texture;
 each chunk gets the index range of the holes that can reach it as
-instance uniforms. All chunks share one `ShaderMaterial`; per-frame inputs
+instance uniforms. The shell's thickness is drawn by a second tube at the
+shell's outer radius (`tunnel_shell.gdshader`): a pixel of it seen through
+a hole is a cut face when the view ray entered the shell inside a hole and
+left it where the shell is solid, otherwise void. Both shaders share the
+field through `shaders/holes.gdshaderinc`. All chunks share one `ShaderMaterial`; per-frame inputs
 (ball position, ripples, fog colour, fade, spin offset) are uniforms.
 
 The Mobile renderer is used on device. Every shader is unshaded with

@@ -160,7 +160,9 @@ thick black outlines. No textures, no realistic lighting, no glow.
 - **Holes**: show a flat, strongly contrasting void colour with a few
   blinking cartoon stars. Every edge of floor gets a thick black outline
   and, just inside it, a crisp lighter lip, like a cut-out cartoon
-  platform. Corners are rounded and diagonal edges are straight, because
+  platform. Through a hole you see the cut faces of the shell (0.45 m
+  thick), in a darker tone of the wall with a black line at the back, so
+  every platform reads as a solid slab. Corners are rounded and diagonal edges are straight, because
   holes are drawn from a distance field, not from grid geometry. A platform
   floating in the void is just the platform: no rims or circles around it.
 - **Edges**: 4× MSAA on geometry; the hole edges are antialiased in the
