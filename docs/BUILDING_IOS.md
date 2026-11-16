@@ -4,7 +4,24 @@ This repository was written on Linux, which can produce Godot's Xcode
 project but cannot compile, sign or install an iOS app. Those steps need a
 Mac. Budget about 30 minutes the first time.
 
-## What you need
+## Quickest way to play: sideload the CI build (no Mac needed)
+
+Every push to `main` builds an **unsigned** `.ipa` on a GitHub macOS runner
+(`.github/workflows/ios-ipa.yml`; it can also be started by hand from the
+Actions tab).
+
+1. GitHub → **Actions** → **iOS ipa** → the latest green run → **Artifacts**
+   → download **Gazer-ipa** and unzip it to get `Gazer-unsigned.ipa`.
+2. Open it in [Sideloadly](https://sideloadly.io) (or AltStore), plug in the
+   iPhone, enter your Apple ID and press Start. Sideloadly signs it with
+   your account.
+3. On the phone: Settings → General → VPN & Device Management → trust your
+   Apple ID, and turn on **Developer Mode** (Settings → Privacy & Security)
+   if iOS asks.
+
+With a free Apple ID the install expires after 7 days; just sideload again.
+
+## Building it yourself: what you need
 
 - A Mac with **Xcode** (current version from the App Store), opened once to
   accept the licence and install the iOS platform.
