@@ -79,17 +79,11 @@ float floor_pattern(float u, float v, float distance_fade) {
 	}
 	if (pattern == 1) {
 		// Big rounded tiles in a running bond, separated by soft seams.
-		float tiles_around = 10.0;
-		float tile_v = circumference / tiles_around;
-		float tile_u = band_length * 1.3;
-		float row = floor(u / tile_u);
-		float shifted = v + mod(row, 2.0) * tile_v * 0.5;
-		vec2 cell = vec2(mod(u, tile_u) - tile_u * 0.5, mod(shifted, tile_v) - tile_v * 0.5);
-		vec2 q = abs(cell) - vec2(tile_u, tile_v) * 0.5 + 0.09 + 0.35;
-		float box = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.35;
+		vec2 tile;
+		float box = -tile_box(u, v, band_length, tile);
 		float seam = 1.0 - inside(box, 0.0);
 		// Alternate tiles a touch lighter, like a hand-painted floor.
-		float checker = mod(row + floor(shifted / tile_v), 2.0);
+		float checker = mod(tile.x + tile.y, 2.0);
 		return (seam * 1.6 + checker * 0.45) * distance_fade;
 	}
 	if (pattern == 2) {

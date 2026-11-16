@@ -58,7 +58,7 @@ shows it too: one to three chevrons pointing the way the ball is carried.
 
 Holes are rectangles on the tunnel surface: a start and length along the
 tunnel, a centre angle and an angular width (optionally twisted into a
-slanted band), with rounded corners, cut through a shell 0.45 m thick.
+slanted band), with rounded corners, cut through a shell 0.8 m thick (chunky, by request).
 Holes that come within 1.2 m of each other blend into one opening. The
 ball keeps its footing until its centre is 0.06 m past an edge; then it
 really drops, and the edges of the cut are solid. A ball that
@@ -160,9 +160,11 @@ thick black outlines. No textures, no realistic lighting, no glow.
 - **Holes**: show a flat, strongly contrasting void colour with a few
   blinking cartoon stars. Every edge of floor gets a thick black outline
   and, just inside it, a crisp lighter lip, like a cut-out cartoon
-  platform. Through a hole you see the cut faces of the shell (0.45 m
+  platform. Through a hole you see the cut faces of the shell (0.8 m
   thick), in a darker tone of the wall with a black line at the back, so
-  every platform reads as a solid slab. Corners are rounded and diagonal edges are straight, because
+  every platform reads as a solid slab. The floor tiles' seams carry on
+  down the faces, so each tile reads as a block (`TunnelView.face_style`
+  also offers plain, layered, and blocks with layers). Corners are rounded and diagonal edges are straight, because
   holes are drawn from a distance field, not from grid geometry. A platform
   floating in the void is just the platform: no rims or circles around it.
 - **Edges**: 4× MSAA on geometry; the hole edges are antialiased in the

@@ -13,7 +13,7 @@ extends RefCounted
 
 ## Thickness (m) of the tunnel's shell. Holes are cut through it, so a ball
 ## that falls has to clear this much wall, and the renderer draws it.
-const WALL_THICKNESS := 0.45
+const WALL_THICKNESS := 0.8
 
 
 ## Wraps an angle to (-PI, PI].

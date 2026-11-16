@@ -16,6 +16,12 @@ uniform sampler2D wall_gradient : source_color, filter_linear, repeat_disable;
 uniform float level_length = 600.0;
 uniform float shell_thickness = 0.45;
 uniform float face_shade = 0.62;      // cut faces are the wall colour, this much darker
+// Face texture: 0 plain, 1 blocks (the floor tiles' seams run down the
+// faces, so every tile is a block), 2 layers (strata, like a cut cake),
+// 3 blocks and layers.
+uniform int face_style = 1;
+uniform float band_length = 3.0;
+uniform float spin_offset = 0.0;
 uniform vec3 outline_color : source_color = vec3(0.04, 0.03, 0.06);
 uniform float fog_distance = 95.0;
 uniform vec3 fog_color : source_color = vec3(0.1);
@@ -47,7 +53,49 @@ void fragment() {
 	}
 
 	float progress = clamp(s / level_length, 0.0, 1.0);
-	vec3 color = texture(wall_gradient, vec2(progress, 0.5)).rgb * face_shade;
+	vec3 wall = texture(wall_gradient, vec2(progress, 0.5)).rgb;
+	vec3 color = wall * face_shade;
+
+	if (face_style > 0) {
+		// Find where the ray really meets the cut face: between the inner
+		// crossing (open) and this pixel (solid) the field changes sign.
+		float lo = t;
+		float hi = 1.0;
+		for (int i = 0; i < 7; i++) {
+			float mid = (lo + hi) * 0.5;
+			vec3 p = camera + ray * mid;
+			if (floor_distance(-p.z, atan(p.x, -p.y)) < 0.0) {
+				lo = mid;
+			} else {
+				hi = mid;
+			}
+		}
+		vec3 hit = camera + ray * hi;
+		float depth = clamp((length(hit.xy) - tunnel_radius) / shell_thickness, 0.0, 1.0);
+		float hit_s = -hit.z;
+		float hit_angle = atan(hit.x, -hit.y);
+		float fade_far = 1.0 - smoothstep(28.0, 60.0, length(hit - camera));
+
+		if (face_style == 2 || face_style == 3) {
+			// Layers: a lighter top course, a darker body, a band between.
+			float layer = depth < 0.34 ? 1.0 : 0.0;
+			color = mix(wall * (face_shade - 0.08), wall * (face_shade + 0.12), layer);
+			float band = abs(depth - 0.34);
+			float w = max(fwidth(depth), 0.0001);
+			color = mix(color, wall * (face_shade - 0.22), (1.0 - smoothstep(0.035 - w, 0.035 + w, band)) * fade_far);
+		}
+		if (face_style == 1 || face_style == 3) {
+			// Blocks: the floor tiles' seams carry on down the face.
+			vec2 tile;
+			float v = wrap_angle(hit_angle - spin_offset) * tunnel_radius + PI * tunnel_radius;
+			float seam = tile_box(hit_s, v, band_length, tile);
+			float w = max(fwidth(seam), 0.0001);
+			float in_seam = 1.0 - smoothstep(-w, w, seam);
+			color = mix(color, wall * (face_shade - 0.25), in_seam * fade_far);
+			// Alternate blocks, like the tiles above.
+			color *= 1.0 - mod(tile.x + tile.y, 2.0) * 0.05 * fade_far;
+		}
+	}
 	// A black line where the face ends at the back of the shell.
 	float pixel = max(fwidth(min(d, 1.0)), 0.0001);
 	float line = max(0.07, pixel * 2.0);

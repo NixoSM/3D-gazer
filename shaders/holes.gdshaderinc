@@ -56,3 +56,18 @@ float floor_distance(float s, float angle) {
 	}
 	return d;
 }
+
+// The floor's rounded tiles (a running bond), shared so the cut faces can
+// continue the tiles' seams: signed distance to the tile's edge (< 0 in a
+// seam), plus which tile it is (x = row, y = column).
+float tile_box(float u, float v, float band_length, out vec2 tile) {
+	float tiles_around = 10.0;
+	float tile_v = TAU * tunnel_radius / tiles_around;
+	float tile_u = band_length * 1.3;
+	float row = floor(u / tile_u);
+	float shifted = v + mod(row, 2.0) * tile_v * 0.5;
+	tile = vec2(row, floor(shifted / tile_v));
+	vec2 cell = vec2(mod(u, tile_u) - tile_u * 0.5, mod(shifted, tile_v) - tile_v * 0.5);
+	vec2 q = abs(cell) - vec2(tile_u, tile_v) * 0.5 + 0.09 + 0.35;
+	return -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.35);
+}

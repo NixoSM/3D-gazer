@@ -66,17 +66,16 @@ func _run() -> void:
 		await _shot("pattern_%d" % pattern)
 	world.tunnel.pattern = 1
 
-	# Shell thicknesses to choose from: a gate edge and a corkscrew each.
-	var thicknesses := [0.15, 0.45, 0.8, 1.2]
-	for k in thicknesses.size():
-		world.tunnel.shell_thickness = thicknesses[k]
+	# Cut-face textures to choose from: a gate edge, a corkscrew, a ring.
+	for style in 4:
+		world.tunnel.face_style = style
 		_main._play_level(1)
 		await _frames(3)
 		session.stop_run()
 		var gate := _first_hole(session.level, false)
 		_place(session, world, gate.s_start - 3.0, gate.angle_center + gate.angle_width * 0.5 + 0.25)
 		await _frames(12)
-		await _shot("thick_%d_gate" % k)
+		await _shot("face_%d_gate" % style)
 		_main._play_level(2)
 		await _frames(3)
 		session.stop_run()
@@ -85,8 +84,15 @@ func _run() -> void:
 				_place(session, world, hole.s_start - 4.0, hole.angle_center + PI)
 				break
 		await _frames(12)
-		await _shot("thick_%d_twist" % k)
-	world.tunnel.shell_thickness = TunnelMath.WALL_THICKNESS
+		await _shot("face_%d_twist" % style)
+		_main._play_level(0)
+		await _frames(3)
+		session.stop_run()
+		var ring := _first_hole(session.level, true)
+		_place(session, world, ring.s_start - 2.5, 0.0)
+		await _frames(12)
+		await _shot("face_%d_ring" % style)
+	world.tunnel.face_style = 1
 
 	# The fall: roll straight into the first ring of level 1, frame by frame.
 	_main._play_level(0)
