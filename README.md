@@ -86,11 +86,6 @@ these steps exist.
 it edits the repository's own `levels/` folder; the downloaded app uses a
 **Gazer Levels** folder in Documents instead.
 
-> **Waiting on PR #5.** On `main` today, the inspector's **Spin** fields
-> can snap back and not apply, and the bots can cut across holes when
-> lining up after a ring. PR #5 fixes both. The
-> descriptions here and in the editor guide assume it is merged.
-
 ## Adding a level
 
 A level is one `.json` file in `levels/` (format:
