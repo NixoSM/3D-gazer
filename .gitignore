@@ -1,0 +1,12 @@
+# Godot 4
+.godot/
+/android/
+*.translation
+# Exports (iOS Xcode projects, Android builds) never go in git
+/build/
+*.ipa
+*.apk
+*.aab
+# OS
+.DS_Store
+Thumbs.db
