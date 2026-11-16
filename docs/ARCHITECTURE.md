@@ -79,9 +79,12 @@ there is floor. Hole parameters go to the shader in one float texture;
 each chunk gets the index range of the holes that can reach it as
 instance uniforms. The shell's thickness is drawn by a second tube at the
 shell's outer radius (`tunnel_shell.gdshader`): a pixel of it seen through
-a hole is a cut face when the view ray, marched through the shell from
-where it crossed the inner surface (inside a hole) to the outer one, meets
-solid shell on the way; a short bisection finds where. Otherwise it is void. Both shaders share the
+a hole is a cut face when the view ray, sphere-traced through the shell
+from where it crossed the inner surface (inside a hole) to the outer one,
+meets solid shell on the way; a bisection finds where. Otherwise it is void.
+Steps are as long as the hole field allows, and rays beyond 22 m get a
+coarse look, because this shader is the game's most expensive part on
+views over open void (`tools/perf_probe.tscn` compares views). Both shaders share the
 field through `shaders/holes.gdshaderinc`. All chunks share one `ShaderMaterial`; per-frame inputs
 (ball position, ripples, fog colour, fade) are uniforms.
 

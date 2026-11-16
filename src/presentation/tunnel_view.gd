@@ -53,6 +53,9 @@ var _next_ripple := 0
 func _ready() -> void:
 	material = ShaderMaterial.new()
 	material.shader = preload("res://shaders/tunnel.gdshader")
+	# The floor draws before the shell, so the depth test can skip shell
+	# pixels hidden behind floor before their (costly) shader runs.
+	material.render_priority = 1
 	shell_material = ShaderMaterial.new()
 	shell_material.shader = preload("res://shaders/tunnel_shell.gdshader")
 	shell_material.set_shader_parameter("shell_thickness", shell_thickness)

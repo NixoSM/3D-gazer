@@ -41,33 +41,62 @@ void fragment() {
 	float b = dot(camera.xy, ray.xy);
 	float c = dot(camera.xy, camera.xy) - tunnel_radius * tunnel_radius;
 	float t = (-b + sqrt(max(b * b - a * c, 0.0))) / max(a, 0.000001);
-	// March through the shell from the inner crossing (open: the floor
-	// would hide the pixel otherwise) to this pixel on the outer surface.
-	// The first solid sample means the ray met a cut face; a ray that stays
-	// open all the way is void. Marching (rather than testing only this
-	// pixel) keeps short platforms solid when the ray leaves the shell
-	// beyond them, into the next hole.
 	vec3 inner = camera + ray * t;
-	if (floor_distance(-inner.z, atan(inner.x, -inner.y)) >= 0.0) {
+	float d = floor_distance(-inner.z, atan(inner.x, -inner.y));
+	if (d >= 0.0) {
 		discard;  // the floor is in front of this pixel anyway
 	}
-	const int STEPS = 10;
+	// Sphere-trace through the shell, from the inner crossing (open: the
+	// floor would hide the pixel otherwise) to this pixel on the outer
+	// surface. The first solid sample means the ray met a cut face; a ray
+	// that stays open all the way is void. Steps are as long as the hole
+	// field allows, so a pixel deep inside a hole (most of the screen over
+	// open void) is settled in one or two samples instead of a fixed march.
+	// `span` is the ray's length measured on the wall, the units of d.
+	float span = length(vec2(world_pos.z - inner.z,
+		tunnel_radius * wrap_angle(atan(world_pos.x, -world_pos.y) - atan(inner.x, -inner.y))));
+	span = max(span, 0.001);
 	float lo = t;
 	float hi = -1.0;
-	for (int i = 1; i <= STEPS; i++) {
-		float k = mix(t, 1.0, float(i) / float(STEPS));
+	float k = t;
+	// Far away a face is a few pixels thin: a coarse look is enough there,
+	// and those grazing rays are the longest (and costliest) to trace.
+	float view_distance = length(world_pos - camera);
+	int steps = view_distance < 22.0 ? 12 : 4;
+	int refine = view_distance < 22.0 ? 10 : 3;
+	for (int i = 0; i < steps; i++) {
+		// smooth_min() makes d up to BLEND/4 more negative than the true
+		// distance near blended holes, hence the margin; never crawl.
+		float step_m = max((-d - BLEND * 0.25) * 0.8, 0.06);
+		// The hole is wider than what is left of the ray: open all the way,
+		// no need to look (most pixels over open void end here).
+		if (-d - BLEND * 0.25 > (1.0 - k) / (1.0 - t) * span) {
+			break;
+		}
+		// Out of steps: the last look is always the far end of the shell.
+		k = i == steps - 1 ? 1.0 : min(k + step_m / span * (1.0 - t), 1.0);
 		vec3 p = camera + ray * k;
-		if (floor_distance(-p.z, atan(p.x, -p.y)) >= 0.0) {
+		d = floor_distance(-p.z, atan(p.x, -p.y));
+		if (d >= 0.0) {
 			hi = k;
 			break;
 		}
 		lo = k;
+		if (k >= 1.0) {
+			break;
+		}
 	}
 	if (hi < 0.0) {
 		discard;  // open all the way through: void
 	}
 	// Refine where the ray meets the face.
-	for (int i = 0; i < 6; i++) {
+	// Bisect until the bracket is a centimetre on the wall: a step that ran
+	// out far from the face needs more halvings than one that landed close
+	// (too few showed as moiré on faces seen edge-on).
+	for (int i = 0; i < refine; i++) {
+		if ((hi - lo) / (1.0 - t) * span < 0.01) {
+			break;
+		}
 		float mid = (lo + hi) * 0.5;
 		vec3 p = camera + ray * mid;
 		if (floor_distance(-p.z, atan(p.x, -p.y)) < 0.0) {
@@ -106,8 +135,11 @@ void fragment() {
 		color *= 1.0 - mod(tile.x + tile.y, 2.0) * 0.05 * fade_far;
 	}
 	// A black line where the face ends at the back of the shell.
-	float dw = max(fwidth(depth), 0.0001);
-	float line = max(0.07, dw * 2.0);
+	// fwidth(depth) is huge where the face's outline meets another surface
+	// (depth jumps there), so it is capped: uncapped, the line swelled into
+	// black spikes at the corners of every face.
+	float dw = clamp(fwidth(depth), 0.0001, 0.02);
+	float line = 0.07;
 	color = mix(color, outline_color, smoothstep(1.0 - line - dw, 1.0 - line + dw, depth));
 
 	float ahead = s + camera.z;
