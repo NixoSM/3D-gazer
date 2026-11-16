@@ -10,7 +10,8 @@ swipe means a higher jump). Tap the moment you land and the ball **echoes**
 the same jump, sending a bold ring across the wall that wraps all the way
 around the tunnel and meets itself on the far side. Chain echoes and the
 notes climb a scale. The echo lands with a short hit-stop (swipe during it
-to change the height), and it flips the direction the tunnel spins.
+to change the height), and it wipes the ball's sideways momentum, so
+whatever you tilt during the freeze is where it goes.
 
 The tunnel also **spins**, gently late in the first level and hard on the
 others, carrying the ball sideways: lean against it. Each level is about a

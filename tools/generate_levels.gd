@@ -64,7 +64,7 @@ func _specs() -> Array[LevelGenerator.Spec]:
 		{"p": "slalom", "n": 4, "i": 0.2},
 		{"p": "bridge", "n": 10, "i": 0.25},
 		{"p": "rest", "secs": 1.0},
-		{"p": "echo_run", "n": 4, "i": 0.3, "spin": 12.0},    # each echo flips the turn
+		{"p": "echo_run", "n": 4, "i": 0.3, "spin": 12.0},
 		{"p": "combo", "n": 2, "i": 0.3},
 		{"p": "funnel", "n": 4, "i": 0.3},
 		{"p": "ring", "n": 2, "i": 0.4},
@@ -92,7 +92,7 @@ func _specs() -> Array[LevelGenerator.Spec]:
 		{"p": "slalom", "n": 4, "i": 0.35},
 		{"p": "ring", "n": 2, "i": 0.4},
 		{"p": "gate", "n": 2, "i": 0.4, "spin": -20.0, "ramp": 0.6},  # the tide turns
-		{"p": "pad_run", "n": 4, "i": 0.35, "rest": 1.3},             # echoes flip the current mid-air
+		{"p": "pad_run", "n": 4, "i": 0.35, "rest": 1.3},
 		{"p": "corkscrew", "n": 12, "i": 0.4},
 		{"p": "combo", "n": 2, "i": 0.45},
 		{"p": "split", "n": 2, "i": 0.5, "spin": 28.0, "ramp": 0.5},

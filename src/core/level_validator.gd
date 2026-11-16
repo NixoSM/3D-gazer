@@ -60,7 +60,7 @@ static func _max_free_run(level: LevelData, s: float) -> int:
 	var any_blocked := false
 	for i in ANGLE_BINS:
 		var angle := (i + 0.5) * TAU / ANGLE_BINS
-		var is_free := level.hole_at(s, angle) == null
+		var is_free := not level.is_hole(s, angle)
 		free[i] = 1 if is_free else 0
 		any_blocked = any_blocked or not is_free
 	if not any_blocked:

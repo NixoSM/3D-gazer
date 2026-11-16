@@ -223,7 +223,7 @@ func _place_ring(s: float, intensity: float) -> float:
 ##
 ## With `pads`, the landing strips are not full rings of floor but pads
 ## around the path, which wanders from pad to pad: each echo must also land
-## on target, and with spin on, each echo flips the push mid-run.
+## on target, while the spin keeps pushing.
 func _place_echo_run(s: float, intensity: float, count: int, pads: bool) -> float:
 	var echo_height := _tuning.max_jump_height
 	var air_time := 2.0 * sqrt(2.0 * echo_height / _tuning.gravity)
@@ -246,28 +246,24 @@ func _place_echo_run(s: float, intensity: float, count: int, pads: bool) -> floa
 	return s
 
 
-## A narrow strip of floor that winds around the tunnel. As a corkscrew it
-## keeps turning one way, fast enough to need a constant lean.
-func _place_bridge(s: float, intensity: float, segments: int, corkscrew: bool) -> float:
+## A narrow strip of floor that winds around the tunnel: one twisted hole,
+## so its edges are clean diagonals. As a corkscrew it turns faster, enough
+## to need a constant lean. `n` counts 1.25 m-equivalent lengths.
+func _place_bridge(s: float, intensity: float, n: int, corkscrew: bool) -> float:
 	var gap := _degrees(110.0, 64.0, intensity) if not corkscrew else _degrees(125.0, 80.0, intensity)
-	# Short segments with small steps, so the edge reads as a smooth curve
-	# rather than a staircase. `segments` counts 1.25 m-equivalent lengths.
-	segments *= 2
-	var segment_length := 0.625 * _speed_scale(s)
+	var length := n * 1.25 * _speed_scale(s)
 	var direction := 1.0 if _rng.randf() < 0.5 else -1.0
-	var turn_per_segment := 0.0
+	var twist := 0.0  # radians per metre
 	if corkscrew:
 		var lateral := lerpf(2.6, 4.4, intensity)  # m/s along the wall
-		turn_per_segment = lateral * (segment_length / _level.speed_at(s)) / _level.tunnel_radius * direction
+		twist = lateral / _level.speed_at(s) / _level.tunnel_radius * direction
 	else:
-		turn_per_segment = _max_drift(segment_length, intensity) * _rng.randf_range(0.35, 0.8) * direction
+		twist = _max_drift(length, intensity) * _rng.randf_range(0.35, 0.8) / length * direction
 	s = _ensure_lead(s, 0.0, intensity)
 	_spread = 0.0
-	for i in segments:
-		_add_hole(s, segment_length, _path_angle + PI, TAU - gap)
-		s += segment_length
-		_path_angle = TunnelMath.wrap_angle_positive(_path_angle + turn_per_segment)
-	return s
+	_level.holes.append(HoleData.new(s, length, _path_angle + PI, TAU - gap, twist))
+	_path_angle = TunnelMath.wrap_angle_positive(_path_angle + twist * length)
+	return s + length
 
 
 ## Two gaps on opposite sides, each a quarter-turn from the path: a choice
@@ -310,7 +306,7 @@ func _place_slalom(s: float, intensity: float, count: int) -> float:
 	return s
 
 
-## Gates back to back whose gap narrows: aim early, then hold the line.
+## Gates back to back whose gap narrows in even steps: aim early, then hold the line.
 func _place_funnel(s: float, intensity: float, count: int) -> float:
 	s = _ensure_lead(s, 0.0, intensity)
 	_spread = 0.0
@@ -319,9 +315,10 @@ func _place_funnel(s: float, intensity: float, count: int) -> float:
 	for i in count:
 		var length := 3.0 * _speed_scale(s)
 		var t := float(i) / maxf(count - 1, 1)
+		# Steps of equal length, centred on the path: big, even, blocky
+		# steps that the blending rounds off, never a jittery staircase.
 		_add_hole(s, length, _path_angle + PI, TAU - lerpf(wide, narrow, t))
 		s += length
-		_path_angle = TunnelMath.wrap_angle_positive(_path_angle + _max_drift(length, intensity) * 0.3 * _rng.randf_range(-1.0, 1.0))
 	return s
 
 

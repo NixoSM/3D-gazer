@@ -17,6 +17,13 @@ var level: LevelData
 var palette: LevelPalette
 var material: ShaderMaterial
 
+## Floor look (see tunnel.gdshader `pattern`): 0 bands, 1 tiles, 2 stripes, 3 diamonds, 4 plain.
+var pattern := 1:
+	set(value):
+		pattern = value
+		if material:
+			material.set_shader_parameter("pattern", value)
+
 var _chunks := {}  # chunk index -> MeshInstance3D
 var _ripples: Array[Vector4] = []
 var _next_ripple := 0
@@ -41,6 +48,31 @@ func set_level(p_level: LevelData, p_palette: LevelPalette, tuning: BallTuning) 
 	material.set_shader_parameter("tunnel_radius", level.tunnel_radius)
 	material.set_shader_parameter("ball_radius", tuning.ball_radius)
 	material.set_shader_parameter("band_length", band_length_for(level))
+	material.set_shader_parameter("hole_data", hole_texture(level))
+	material.set_shader_parameter("pattern", pattern)
+	set_spin_offset(0.0)
+
+
+## The level's holes packed for the shader: two RGBA float texels each,
+## (s_start, length, angle_center, angle_width) and (twist, 0, 0, 0).
+static func hole_texture(level: LevelData) -> ImageTexture:
+	var count := maxi(level.holes.size(), 1)
+	var data := PackedFloat32Array()
+	data.resize(count * 8)
+	for i in level.holes.size():
+		var hole := level.holes[i]
+		data[i * 8 + 0] = hole.s_start
+		data[i * 8 + 1] = hole.length
+		data[i * 8 + 2] = hole.angle_center
+		data[i * 8 + 3] = hole.angle_width
+		data[i * 8 + 4] = hole.twist
+	var image := Image.create_from_data(count * 2, 1, false, Image.FORMAT_RGBAF, data.to_byte_array())
+	return ImageTexture.create_from_image(image)
+
+
+## How far (radians) the floor pattern has slid with the ground spin.
+func set_spin_offset(radians: float) -> void:
+	material.set_shader_parameter("spin_offset", wrapf(radians, -PI, PI))
 
 
 ## Faster levels get shorter light/dark bands, so the rings flicker past
@@ -104,6 +136,9 @@ func _build_chunk(index: int) -> void:
 	instance.name = "Chunk%d" % index
 	instance.mesh = TunnelMeshBuilder.build_chunk(level, index * CHUNK_LENGTH, (index + 1) * CHUNK_LENGTH)
 	instance.material_override = material
+	var holes := TunnelMeshBuilder.hole_range(level, index * CHUNK_LENGTH, (index + 1) * CHUNK_LENGTH)
+	instance.set_instance_shader_parameter("hole_first", holes.x)
+	instance.set_instance_shader_parameter("hole_count", holes.y)
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
 	_chunks[index] = instance

@@ -8,21 +8,23 @@ extends RefCounted
 ## flat strip whose sides are glued together: the curved, rotating 3D view
 ## is purely a presentation concern (see CameraRig).
 ##
-## Holes are cut through a shell TunnelMath.WALL_THICKNESS thick. When the
-## ground goes from under the ball it really drops, and the four walls of
-## the cut are solid: a ball that drops near the far edge slams into it and
-## bounces back instead of passing through, and a ball that lands on an edge
-## can be popped back out. The run is lost once the ball's centre sinks
-## below the lip or it hits a wall side-on.
+## Holes are cut through a shell TunnelMath.WALL_THICKNESS thick, with the
+## smooth outline LevelData.floor_distance() describes (the renderer draws
+## the very same outline). When the ground goes from under the ball it
+## really drops, and the edges of the cut are solid: a ball that drops near
+## the far edge slams into it and bounces back instead of passing through,
+## and a ball that lands on an edge can be popped back out. The run is lost
+## once the ball's centre sinks below the lip or it hits an edge side-on.
 ##
 ## Ground spin (LevelData.spin) carries everything inside the tunnel
-## sideways; each echo jump flips its direction.
+## sideways, always in the direction the level sets.
 ##
 ## An echo starts with a hit-stop (Phase.FROZEN): the ball holds still on
 ## the floor for tuning.echo_freeze_time, then jumps. A swipe during the
 ## freeze replaces the echo's height, so a player can reshape the rhythm;
 ## while a finger is still down the freeze waits for it, up to
-## tuning.echo_freeze_max.
+## tuning.echo_freeze_max. The echo also throws away sideways momentum:
+## the ball takes off in whatever direction the phone is tilted.
 ##
 ## Call step() at a fixed rate with an InputFrame; it returns the events that
 ## happened during that step. No signals, no nodes, no randomness: the same
@@ -32,7 +34,7 @@ extends RefCounted
 enum Phase { ROLLING, AIRBORNE, FALLING, FINISHED, FROZEN }
 
 enum EventType {
-	JUMPED,        ## Left the ground. data: height, echo, perfect, chain, spin_flipped
+	JUMPED,        ## Left the ground. data: height, echo, perfect, chain
 	LANDED,        ## Touched down safely. data: echo, height = impact speed (m/s)
 	CHAIN_BROKEN,  ## Landed and the echo window closed without a tap. data: chain
 	FELL,          ## Lost into a hole.
@@ -41,8 +43,6 @@ enum EventType {
 	ECHO_HIT,      ## An echo tap connected; the hit-stop starts. data: perfect, chain (the coming one)
 }
 
-## Below this spin rate (°/s) an echo does not flip the spin.
-const SPIN_FLIP_THRESHOLD := 0.5
 ## The run is lost once the ball's centre is this far below the lip of a hole.
 const LOST_DEPTH := 0.02
 ## A wall contact whose normal points less "up" than this is a crash, not a pop.
@@ -57,7 +57,6 @@ class SimEvent:
 	var echo: bool = false
 	var perfect: bool = false
 	var chain: int = 0
-	var spin_flipped: bool = false
 
 	func _init(p_type: EventType, p_s: float, p_angle: float) -> void:
 		type = p_type
@@ -88,8 +87,6 @@ var time: float = 0.0
 var last_jump_height: float = 0.0
 ## Consecutive echo jumps.
 var echo_chain: int = 0
-## +1 or -1: multiplies the level's spin. Every echo jump flips it.
-var spin_direction: float = 1.0
 
 var _echo_queued: bool = false
 var _echo_queued_perfect: bool = false
@@ -98,8 +95,8 @@ var _time_since_landing: float = INF
 var _landing_resolved: bool = true
 ## Seconds since the ground went from under a rolling ball (INF = it did not).
 var _time_unsupported: float = INF
-## The hole the ball was lost into: its walls still bound the fall.
-var _fall_hole: HoleData
+## Tilt of the current step, for the echo's take-off direction.
+var _tilt: float = 0.0
 var _freeze_left: float = 0.0
 var _freeze_elapsed: float = 0.0
 var _freeze_perfect: bool = false
@@ -122,14 +119,13 @@ func reset(start_angle: float = 0.0) -> void:
 	time = 0.0
 	last_jump_height = 0.0
 	echo_chain = 0
-	spin_direction = 1.0
 	_echo_queued = false
 	_echo_queued_perfect = false
 	_buffered_jump_strength = -1.0
 	_time_since_landing = INF
 	_landing_resolved = true
 	_time_unsupported = INF
-	_fall_hole = null
+	_tilt = 0.0
 	_freeze_left = 0.0
 	_freeze_elapsed = 0.0
 	_freeze_perfect = false
@@ -148,14 +144,14 @@ func is_playing() -> bool:
 	return phase in [Phase.ROLLING, Phase.AIRBORNE, Phase.FROZEN]
 
 
-## Sideways drift (m/s) the ground spin imposes here, with the echo flips applied.
+## Sideways drift (m/s) the ground spin imposes here.
 func spin_speed() -> float:
-	return level.spin_speed_at(s) * spin_direction
+	return level.spin_speed_at(s)
 
 
-## Spin here in degrees per second, with the echo flips applied.
+## Spin here in degrees per second.
 func spin_rate() -> float:
-	return level.spin_at(s) * spin_direction
+	return level.spin_at(s)
 
 
 ## Seconds until the ball reaches the wall again, assuming no input.
@@ -176,6 +172,7 @@ func jump_height_for_strength(strength: float) -> float:
 func step(dt: float, input: InputFrame) -> Array[SimEvent]:
 	var events: Array[SimEvent] = []
 	time += dt
+	_tilt = clampf(input.tilt, -1.0, 1.0)
 	if phase == Phase.FROZEN:
 		_step_frozen(dt, input, events)
 		return events
@@ -248,7 +245,7 @@ func _step_rolling(dt: float, input: InputFrame, events: Array[SimEvent]) -> voi
 			events.append(broken)
 		echo_chain = 0
 
-	if _hole_under_ball() != null:
+	if _over_void():
 		# The ground is gone: start to drop. Gravity and the cut decide the rest.
 		phase = Phase.AIRBORNE
 		vertical_speed = 0.0
@@ -288,18 +285,17 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 	vertical_speed -= tuning.gravity * dt
 	height += vertical_speed * dt
 
-	var hole := _hole_under_ball()
-	if hole != null:
+	if _over_void():
 		# No floor under the centre: the ball keeps dropping, and only the
-		# walls of the cut can stop it.
+		# edges of the cut can stop it.
 		var before := _velocity()
-		var contact := _collide_with_cut(hole)
+		var contact := _collide_with_shell()
 		if contact != Vector3.ZERO and contact.z < POP_NORMAL:
-			# Side-on into the wall of the cut: a crash, the run is over.
-			_lose(hole, events)
+			# Side-on into the edge of the cut: a crash, the run is over.
+			_lose(events)
 			_report_bump(before, events)
 		elif height + tuning.ball_radius < -LOST_DEPTH:
-			_lose(hole, events)
+			_lose(events)
 		return
 	if height > 0.0:
 		return
@@ -366,10 +362,9 @@ func _step_falling(dt: float, events: Array[SimEvent]) -> void:
 	# but it cannot pass through the walls of the cut on its way.
 	vertical_speed -= tuning.gravity * dt
 	height += vertical_speed * dt
-	if _fall_hole != null:
-		var before := _velocity()
-		if _collide_with_cut(_fall_hole) != Vector3.ZERO:
-			_report_bump(before, events)
+	var before := _velocity()
+	if _collide_with_shell() != Vector3.ZERO:
+		_report_bump(before, events)
 
 
 func _velocity() -> Vector3:
@@ -397,13 +392,10 @@ func _jump(jump_height: float, echo: bool, perfect: bool, events: Array[SimEvent
 	var ceiling := 2.0 * level.tunnel_radius - 2.0 * tuning.ball_radius - 0.3
 	jump_height = minf(jump_height, ceiling)
 	last_jump_height = jump_height
-	var flipped := false
 	if echo:
 		echo_chain += 1
-		# The echo turns the tunnel around: spin changes direction.
-		if absf(level.spin_at(s)) > SPIN_FLIP_THRESHOLD:
-			spin_direction = -spin_direction
-			flipped = true
+		# A clean slate sideways: the ball leaves in the direction of the tilt.
+		lateral_speed = _tilt * tuning.echo_redirect_speed
 	phase = Phase.AIRBORNE
 	vertical_speed = sqrt(2.0 * tuning.gravity * jump_height)
 	_buffered_jump_strength = -1.0
@@ -413,81 +405,83 @@ func _jump(jump_height: float, echo: bool, perfect: bool, events: Array[SimEvent
 	jumped.echo = echo
 	jumped.perfect = perfect
 	jumped.chain = echo_chain
-	jumped.spin_flipped = flipped
 	events.append(jumped)
 
 
-## The hole under the ball's centre, if it is far enough inside to drop.
-func _hole_under_ball() -> HoleData:
-	var margin := tuning.hole_forgiveness
-	return level.hole_at(s, angle, margin, margin)
+## Is the ball's centre over open void, far enough inside to drop?
+func _over_void() -> bool:
+	return level.is_hole(s, angle, tuning.hole_forgiveness)
 
 
-func _lose(hole: HoleData, events: Array[SimEvent]) -> void:
+func _lose(events: Array[SimEvent]) -> void:
 	phase = Phase.FALLING
-	_fall_hole = hole
 	echo_chain = 0
 	events.append(SimEvent.new(EventType.FELL, s, angle))
 
 
-## Pushes the ball out of the solid walls around `hole` and bounces it.
+## Pushes the ball out of the solid shell and bounces it off.
 ##
-## Works in the hole's local frame: u along the tunnel (= s), v along the
-## wall (arc length from the hole's centre line), c the height of the ball's
-## centre above the inner surface. The shell occupies -T <= c <= 0 outside
-## the hole's rectangle; each of the four sides is tested only where the
-## shell really is solid (an adjacent hole may continue the opening).
-## The bounce changes all three speeds; while the ball is alive the next
-## step puts the forward speed back to the level's.
-## Returns the normal (u, v, c) of the deepest contact, or ZERO.
-func _collide_with_cut(hole: HoleData) -> Vector3:
+## Works in surface coordinates: u along the tunnel (= s), v along the wall,
+## c the height of the ball's centre above the inner surface. The shell is
+## every point with floor_distance >= 0 and -T <= c <= 0. The closest solid
+## point to the ball's centre is found from the distance field (its value
+## is how far the edge is, its gradient which way), so this works for any
+## hole shape, blended corners included. The bounce changes all three
+## speeds; while the ball is alive the next step puts the forward speed
+## back to the level's. Returns the contact normal (u, v, c), or ZERO.
+func _collide_with_shell() -> Vector3:
 	var radius := tuning.ball_radius
 	var r := level.tunnel_radius
-	var center := Vector3(s, TunnelMath.angle_difference(angle, hole.angle_center) * r, height + radius)
-	if center.z >= radius:
+	var thickness := TunnelMath.WALL_THICKNESS
+	var c := height + radius
+	if c >= radius or c < -thickness - radius:
 		return Vector3.ZERO
-	var velocity := Vector3(forward_speed, lateral_speed, vertical_speed)
-	var depth_point := clampf(center.z, -TunnelMath.WALL_THICKNESS, 0.0)
-	var half_width := hole.angle_width * 0.5 * r
-	var probe := 0.05
+	var d := level.floor_distance(s, angle)
+	if d >= radius and c >= 0.0:
+		return Vector3.ZERO
 
-	# (closest solid point, fallback normal) for each side that is solid.
-	var sides: Array = []
-	if level.hole_at(hole.s_start - probe, angle) == null:
-		sides.append([Vector3(hole.s_start, center.y, depth_point), Vector3(1, 0, 0)])
-	if level.hole_at(hole.s_end() + probe, angle) == null:
-		sides.append([Vector3(hole.s_end(), center.y, depth_point), Vector3(-1, 0, 0)])
-	if hole.angle_width < TAU - 0.001:
-		if level.hole_at(s, hole.angle_center - (half_width + probe) / r) == null:
-			sides.append([Vector3(center.x, -half_width, depth_point), Vector3(0, 1, 0)])
-		if level.hole_at(s, hole.angle_center + (half_width + probe) / r) == null:
-			sides.append([Vector3(center.x, half_width, depth_point), Vector3(0, -1, 0)])
-
-	var deepest := Vector3.ZERO
-	var deepest_penetration := 0.0
-	for side in sides:
-		var point: Vector3 = side[0]
-		var offset := center - point
+	var normal: Vector3
+	var penetration: float
+	var depth := c - clampf(c, -thickness, 0.0)
+	if d >= 0.0 and depth == 0.0:
+		# Inside the shell itself (only possible after a deep, fast hit):
+		# out through the top.
+		normal = Vector3(0.0, 0.0, 1.0)
+		penetration = radius - c
+	else:
+		# From the closest solid point to the centre: |d| away from the
+		# floor in the plane (d < 0 over void), plus any depth below or
+		# above the shell.
+		var offset := Vector3(0.0, 0.0, depth)
+		if d < 0.0:
+			var towards_floor := _floor_gradient()
+			offset = Vector3(towards_floor.x * d, towards_floor.y * d, depth)
 		var distance := offset.length()
 		if distance >= radius:
-			continue
-		var normal: Vector3 = side[1] if distance < 0.00001 else offset / distance
-		var penetration := radius - distance
-		center += normal * penetration
-		var into := velocity.dot(normal)
-		if into < 0.0:
-			var tangent := velocity - normal * into
-			velocity = tangent * 0.9 - normal * into * tuning.wall_restitution
-		if penetration > deepest_penetration:
-			deepest_penetration = penetration
-			deepest = normal
+			return Vector3.ZERO
+		normal = Vector3(0.0, 0.0, 1.0) if distance < 0.00001 else offset / distance
+		penetration = radius - distance
 
-	if deepest == Vector3.ZERO:
-		return deepest
-	s = center.x
-	angle = TunnelMath.wrap_angle_positive(hole.angle_center + center.y / r)
-	height = center.z - radius
+	s += normal.x * penetration
+	angle = TunnelMath.wrap_angle_positive(angle + normal.y * penetration / r)
+	height = c + normal.z * penetration - radius
+	var velocity := _velocity()
+	var into := velocity.dot(normal)
+	if into < 0.0:
+		var tangent := velocity - normal * into
+		velocity = tangent * 0.9 - normal * into * tuning.wall_restitution
 	forward_speed = velocity.x
 	lateral_speed = velocity.y
 	vertical_speed = velocity.z
-	return deepest
+	return normal
+
+
+## Unit direction (u, v) in which the floor gets closer: the gradient of
+## LevelData.floor_distance at the ball, by central differences.
+func _floor_gradient() -> Vector2:
+	const STEP := 0.02
+	var r := level.tunnel_radius
+	var du := level.floor_distance(s + STEP, angle) - level.floor_distance(s - STEP, angle)
+	var dv := level.floor_distance(s, angle + STEP / r) - level.floor_distance(s, angle - STEP / r)
+	var gradient := Vector2(du, dv)
+	return Vector2(1.0, 0.0) if gradient.length() < 0.000001 else gradient.normalized()

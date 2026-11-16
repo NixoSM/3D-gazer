@@ -87,15 +87,58 @@ func first_hole_index_near(s: float) -> int:
 	return index
 
 
-## Returns the hole containing the surface point, or null.
-func hole_at(s: float, angle: float, margin_s: float = 0.0, margin_arc: float = 0.0) -> HoleData:
-	var index := first_hole_index_near(s)
-	while index < holes.size() and holes[index].s_start <= s:
+## How far (m) apart two holes may be and still blend into one opening.
+## Holes closer than this merge smoothly: no seam or rim between holes that
+## touch, and no sharp floor corners where they meet. Shared with the shader.
+const BLEND := 1.2
+
+
+## Signed distance (m, on the wall) from the surface point to the nearest
+## hole edge: positive on solid floor, negative over open void.
+##
+## The union of all holes, smoothly blended (polynomial smooth-min, BLEND):
+## the simulation and the renderer (tunnel.gdshader) compute exactly this,
+## so the edge you see is the edge you fall from.
+func floor_distance(s: float, angle: float) -> float:
+	var reach := BLEND + HoleData.CORNER_RADIUS + 1.0
+	var index := first_hole_index_near(s - reach)
+	var distance := INF
+	while index < holes.size() and holes[index].s_start <= s + reach:
 		var hole := holes[index]
-		if hole.contains(s, angle, tunnel_radius, margin_s, margin_arc):
-			return hole
 		index += 1
-	return null
+		if hole.s_end() < s - reach:
+			continue
+		distance = smooth_min(distance, hole.signed_distance(s, angle, tunnel_radius))
+	return distance
+
+
+## Polynomial smooth minimum: like min(a, b), but within BLEND of each other
+## the two shapes melt together. Never larger than min(a, b).
+static func smooth_min(a: float, b: float) -> float:
+	if is_inf(a):
+		return b
+	var h := maxf(BLEND - absf(a - b), 0.0) / BLEND
+	return minf(a, b) - h * h * BLEND * 0.25
+
+
+## Is the surface point over open void, by more than `margin` metres?
+func is_hole(s: float, angle: float, margin: float = 0.0) -> bool:
+	return floor_distance(s, angle) < -margin
+
+
+## The hole whose edge is nearest the surface point if that point is open
+## (by more than `margin`), or null. Useful to know *which* hole you are in.
+func hole_at(s: float, angle: float, margin: float = 0.0) -> HoleData:
+	if not is_hole(s, angle, margin):
+		return null
+	var best: HoleData = null
+	var best_distance := INF
+	for hole in holes_between(s - BLEND, s + BLEND):
+		var d := hole.signed_distance(s, angle, tunnel_radius)
+		if d < best_distance:
+			best_distance = d
+			best = hole
+	return best
 
 
 ## Holes overlapping [s0, s1). Used by the renderer's chunk builder.

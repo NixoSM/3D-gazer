@@ -24,7 +24,7 @@ values quoted here are the defaults at the time of writing.
 |---|---|
 | Tilt left/right | Lateral acceleration `5/7 · g · sin(tilt)`, the acceleration of a solid sphere rolling down a slope. Rolling resistance decays lateral speed exponentially (`1.15/s`), so releasing the tilt lets the ball coast. 32° of phone tilt is full tilt; airborne, the ball keeps 45% of tilt authority. |
 | Swipe up | Jump. Height scales with swipe length: 3.5% of the screen height is the minimum swipe (0.7 m), 28% is a full swipe (3.4 m). Long swipes fire as soon as they reach full length; others fire on release. |
-| Tap while landing | **Echo**: repeat the last jump exactly. Accepted from 0.20 s before touchdown to 0.10 s after. Within 0.06 s of touchdown it is **perfect**. Taps register on touch-down, not release, because timing matters. The echo lands with a **hit-stop**: the world freezes for 0.14 s while the shockwave keeps spreading, so the player registers the hit. A swipe during the freeze replaces the echo's height (and ends the freeze at once); while a finger is still down the freeze waits for it, up to 0.30 s. Each echo also **flips the ground spin** (see below). |
+| Tap while landing | **Echo**: repeat the last jump exactly. Accepted from 0.20 s before touchdown to 0.10 s after. Within 0.06 s of touchdown it is **perfect**. Taps register on touch-down, not release, because timing matters. The echo lands with a **hit-stop**: the world freezes for 0.14 s while the shockwave keeps spreading, so the player registers the hit. A swipe during the freeze replaces the echo's height (and ends the freeze at once); while a finger is still down the freeze waits for it, up to 0.30 s. The echo also **resets sideways momentum**: the ball takes off sideways at 4 m/s times the tilt held at that moment, so a tilt during the freeze acts at once instead of fighting the old drift. |
 
 Tilt is the roll angle `atan2(x, |(y, z)|)` of the gravity vector, which
 does not change when the player tips the phone towards themselves. Level is
@@ -48,17 +48,20 @@ snap it round, two far apart ease it in. In the simulation, rolling
 resistance relaxes the ball's sideways speed towards the spin drift
 instead of towards zero, and the air inside the tunnel turns with it.
 
-Every echo flips the spin's direction (only while there is spin to flip).
-That turns echo runs into a second skill: each bounce the push reverses, so
-the lean must reverse too. A HUD marker under the pause button shows the
-push: one to three chevrons pointing the way the ball is being carried.
+The spin never changes direction on its own: only the level data turns it.
+(An earlier build flipped it on every echo; Nicola dropped that after
+playing it.) The floor pattern slides sideways with the spin, like a
+conveyor, so the push can be seen, and a HUD marker under the pause button
+shows it too: one to three chevrons pointing the way the ball is carried.
 
 ## Holes and failure
 
 Holes are rectangles on the tunnel surface: a start and length along the
-tunnel, a centre angle and an angular width, cut through a shell 0.45 m
-thick. The ball keeps its footing until its centre is 0.06 m past an edge;
-then it really drops, and the four walls of the cut are solid. A ball that
+tunnel, a centre angle and an angular width (optionally twisted into a
+slanted band), with rounded corners, cut through a shell 0.45 m thick.
+Holes that come within 1.2 m of each other blend into one opening. The
+ball keeps its footing until its centre is 0.06 m past an edge; then it
+really drops, and the edges of the cut are solid. A ball that
 drops near the far edge slams into that wall and bounces back (with a thud,
 a shake and a haptic) instead of passing through it; a ball that comes down
 on an edge from above can be popped back out. The run is lost once the
@@ -81,10 +84,9 @@ speed drives the presentation too:
 
 - **Field of view** follows speed: 64° at 12 m/s plus 1.5° per m/s (Dawn
   starts at 67°, Ember ends near 86°), so more wall streams past the edges.
-- **Speed lines**: white cartoon streaks shoot out from the vanishing point
-  above 15.5 m/s, a few on Tide and a storm on Ember.
-- **Bands** are shorter on faster levels (3 m on Dawn, about 2 m on Ember),
-  so the rings flicker past much quicker.
+- The **floor pattern** repeats faster on faster levels (its scale follows
+  3 m on Dawn down to about 2 m on Ember), so it streams past much quicker.
+  (Cartoon speed lines were tried and rejected as silly.)
 - A fine **camera rumble** above 15 m/s.
 
 ## Level patterns
@@ -102,18 +104,18 @@ part of play.
 | gate | A wide hole with one gap: steer into the gap. |
 | ring | A full ring: jump it. |
 | echo run | Evenly spaced rings matched to the *maximum* jump: one long swipe, then echo through. Tuned to the maximum because any long swipe gives exactly that height, so it is reproducible. |
-| pad run | An echo run whose landing strips are pads around a wandering path: every echo must land on target, and with spin on, every echo flips the push mid-air. |
-| bridge | A narrow strip of floor that winds around the tunnel. |
-| corkscrew | A bridge that keeps turning one way, fast enough to need a constant lean. |
+| pad run | An echo run whose landing strips are pads around a wandering path: every echo must land on target. |
+| bridge | A narrow strip of floor that winds around the tunnel: one twisted hole, so its edges are clean diagonals. |
+| corkscrew | A bridge that turns faster, enough to need a constant lean. |
 | slalom | Gates whose gaps alternate either side of the path, on a beat. |
-| funnel | Gates back to back whose gap narrows. |
+| funnel | Gates back to back whose gap narrows in even, blocky steps. |
 | combo | A ring, then a gate just after the landing with its gap off to one side. |
 | split | Two gaps on opposite sides: pick one. |
 
 The three levels:
 
 - **Dawn** teaches one idea at a time (lean, jump, echo), then introduces a
-  gentle spin (8 to 12 °/s) and lets the echo flip it.
+  gentle spin (8 to 12 °/s).
 - **Tide** is about currents: the spin is on from the start and the tide
   turns (+15, −20, +28, −30 °/s), with pad runs and corkscrews.
 - **Ember** is the test: 21 to 25 m/s, spin from 25 up to 50 °/s that snaps
@@ -123,8 +125,8 @@ The three levels:
 `LevelValidator` rejects any gap that cannot be jumped at the local speed.
 Tests play every level to the end with `Autopilot`, both perfectly and with
 a **0.2 s reaction delay** on its steering (roughly a person's). The delay
-the bot can survive measures difficulty: Dawn still finishes at 0.5 s, Tide
-fails from 0.4 s, Ember from 0.3 s.
+the bot can survive measures difficulty: Dawn still finishes at 0.45 s,
+Tide fails from 0.4 s, Ember from 0.25 s.
 
 ## Feel ("juice") inventory
 
@@ -135,13 +137,12 @@ All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
   tunnel to meet itself on the far side. The ball flashes in the accent colour, the FOV kicks, a
   glassy note plays (D-major pentatonic, one step higher per echo in the
   chain) and a medium haptic fires. A perfect echo adds a bell overtone, a
-  brighter wave and a heavy haptic. The HUD shows `×N` from the second echo.
+  brighter wave and a heavy haptic. (No streak counter or PERFECT popup:
+  they were removed as noise.)
 - Jump: stretch, plus a soft whoosh pitched by height.
 - Fall: a falling tone, a small camera shake, a heavy haptic, then a fade.
   Hitting the wall of the cut on the way down adds a thud, a squash, a
   shake and a medium haptic.
-- Spin flip (an echo that reverses the spin): a second wave from the far
-  side of the tunnel, a whoosh, and the HUD chevrons pop and turn round.
 - Finish: a huge ripple, a rising arpeggio, a success haptic, the results screen.
 
 ## Visual language
@@ -150,19 +151,23 @@ Old Flash-game cartoon: flat, bright, high-contrast colour, hard shading and
 thick black outlines. No textures, no realistic lighting, no glow.
 
 - **Tunnel**: one flat colour at a time, taken from the level palette by
-  progress, in alternating light/dark rings that sell the speed, with a few
-  thin lane lines that make rotation readable. The half of the tunnel
-  opposite the ball is a flat darker tone (cel shading), which keeps "down"
-  obvious as the world turns. Distance fades into the void colour one flat
-  step per band (so the steps never cut across holes), and smoothly in the
-  far distance where bands are only a few pixels thick.
+  progress, with a two-tone floor pattern (default: big rounded tiles in a
+  running bond; stripes, diamonds, plain and the old rings are the other
+  choices, `TunnelView.pattern`). The pattern slides sideways with the
+  ground spin. The half of the tunnel opposite the ball is a flat darker
+  tone (cel shading), which keeps "down" obvious as the world turns.
+  Distance fades smoothly into the void colour along the tunnel.
 - **Holes**: show a flat, strongly contrasting void colour with a few
-  blinking cartoon stars. Each hole has a thick black outline (a strip on
-  the wall plus the black cut face of the 0.45 m shell; the two share an
-  edge, so no sliver of wall shows between them).
-- **Edges**: 4× MSAA. Lane lines fade out with distance before they get
-  thinner than a pixel. Tunnel chunks overlap by 0.3 m so their seams
-  never open hairline cracks onto the void.
+  blinking cartoon stars. Every edge of floor gets a thick black outline
+  and, just inside it, a crisp lighter lip, like a cut-out cartoon
+  platform. Corners are rounded and diagonal edges are straight, because
+  holes are drawn from a distance field, not from grid geometry. A platform
+  floating in the void is just the platform: no rims or circles around it.
+- **Edges**: 4× MSAA on geometry; the hole edges are antialiased in the
+  shader from the distance field, and the outline never gets thinner than
+  two pixels, so far edges stay clean. Patterns fade out with distance
+  before they shimmer. Tunnel chunks overlap by 0.3 m so their seams never
+  open hairline cracks onto the void.
 - **Ball** (default skin "Classic"): a white ball with a wide coloured
   stripe, like a striped pool ball, so rolling reads in every direction,
   with one hard shadow step, a solid white shine spot and a thick black

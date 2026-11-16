@@ -7,10 +7,11 @@ extends RefCounted
 ## Angles are stored in degrees in JSON (friendlier to humans and tools) and
 ## in radians in memory.
 ##
-## Version history: 1 = holes and palette; 2 adds the optional `spin` keys.
+## Version history: 1 = holes and palette; 2 adds the optional `spin` keys;
+## 3 adds the optional hole `twist` (and holes get rounded, blended edges).
 ## Older versions are read as if every new field had its default.
 
-const FORMAT_VERSION := 2
+const FORMAT_VERSION := 3
 const OLDEST_SUPPORTED_VERSION := 1
 
 
@@ -70,7 +71,8 @@ static func from_dict(data: Dictionary, source_name: String = "<dict>") -> Resul
 			float(entry.get("s", 0.0)),
 			float(entry.get("length", 1.0)),
 			deg_to_rad(float(entry.get("angle", 0.0))),
-			deg_to_rad(float(entry.get("width", 45.0)))))
+			deg_to_rad(float(entry.get("width", 45.0))),
+			deg_to_rad(float(entry.get("twist", 0.0)))))
 
 	for entry in data.get("spin", []):
 		level.spin.append(SpinKey.new(float(entry.get("s", 0.0)), float(entry.get("rate", 0.0))))
@@ -92,12 +94,15 @@ static func to_dict(level: LevelData) -> Dictionary:
 		})
 	var holes := []
 	for hole in level.holes:
-		holes.append({
+		var entry := {
 			"s": snappedf(hole.s_start, 0.01),
 			"length": snappedf(hole.length, 0.01),
 			"angle": snappedf(rad_to_deg(hole.angle_center), 0.1),
 			"width": snappedf(rad_to_deg(hole.angle_width), 0.1),
-		})
+		}
+		if hole.twist != 0.0:
+			entry["twist"] = snappedf(rad_to_deg(hole.twist), 0.01)
+		holes.append(entry)
 	var spin := []
 	for key in level.spin:
 		spin.append({"s": snappedf(key.s, 0.01), "rate": snappedf(key.rate, 0.1)})
@@ -150,6 +155,8 @@ static func validate(level: LevelData, source_name: String = "<level>") -> Packe
 			errors.append("%s: hole %d width must be in (0, 360] degrees" % [source_name, i])
 		if hole.s_start < 0.0 or hole.s_end() > level.length:
 			errors.append("%s: hole %d lies outside the tunnel" % [source_name, i])
+		if absf(rad_to_deg(hole.twist)) > 30.0:
+			errors.append("%s: hole %d twist must be within ±30 °/m" % [source_name, i])
 	for i in level.spin.size():
 		var key := level.spin[i]
 		if key.s < 0.0 or key.s > level.length:

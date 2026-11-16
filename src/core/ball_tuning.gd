@@ -47,6 +47,10 @@ extends Resource
 ## While the finger is still down (maybe mid-swipe) the hit-stop may stretch
 ## up to this long (s) to let the swipe finish.
 @export_range(0.0, 0.6) var echo_freeze_max: float = 0.3
+## An echo throws away the ball's sideways momentum, so whatever the player
+## tilts during the hit-stop takes over at once: the ball leaves the ground
+## moving sideways at this speed (m/s) times the tilt (0 = straight up).
+@export_range(0.0, 10.0) var echo_redirect_speed: float = 4.0
 
 @export_group("Holes")
 ## Metres of forgiveness at hole edges: the ball keeps its footing until its

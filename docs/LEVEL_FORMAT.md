@@ -7,7 +7,7 @@ script, a spreadsheet export, the future editor) can make levels.
 
 ```json
 {
-  "format_version": 2,
+  "format_version": 3,
   "id": "01_dawn",
   "name": "Dawn",
   "length": 691.0,
@@ -33,7 +33,7 @@ script, a spreadsheet export, the future editor) can make levels.
 
 | Field | Unit | Meaning |
 |---|---|---|
-| `format_version` | | `2` (version `1` files, without `spin`, still load). Bump it (and teach `LevelSerializer` to migrate) when the format changes. |
+| `format_version` | | `3` (versions `1` and `2`, without `spin` or `twist`, still load). Bump it (and teach `LevelSerializer` to migrate) when the format changes. |
 | `id` | | Unique, stable. Used for save data, so do not rename shipped levels. |
 | `name` | | Shown to players. |
 | `length` | m | The level is complete at this distance. For a 60 s level use `SpeedProfile.length_for_duration(60, base_speed, speed_ramp)`. |
@@ -41,16 +41,21 @@ script, a spreadsheet export, the future editor) can make levels.
 | `base_speed` | m/s | Forward speed at the start. |
 | `speed_ramp` | fraction | Extra speed reached at the end (`0.2` = +20%), linear in progress. |
 | `palette[]` | | Colour stops by progress `at` in [0, 1]: `wall` (the tunnel's flat colour), `void` (seen through holes and in the distance: keep it in strong contrast with `wall`), `accent` (echo rings, best-run marker). At least two stops. Interpolated in OKLab. |
-| `holes[]` | | Rectangles on the tunnel surface. Order does not matter (they are sorted on load). |
+| `holes[]` | | Rectangles on the tunnel surface, with rounded corners (0.6 m), optionally twisted. Order does not matter (they are sorted on load). |
 | `holes[].s` | m | Where the hole starts along the tunnel. |
 | `holes[].length` | m | How long it is along the tunnel. |
 | `holes[].angle` | degrees | Centre of the hole around the tunnel. 0 is where the ball starts (the floor), positive is to the player's right. |
 | `holes[].width` | degrees | Angular width, up to 360 (a full ring). A hole may cross 0°/360°. |
+| `holes[].twist` | degrees/m | Optional, default 0. The hole's centre turns this much per metre along the tunnel, so it becomes a slanted band (`angle` is its centre at `s`). Within ±30. Use it for winding bridges and corkscrews instead of many small steps. |
 | `spin[]` | | Optional ground spin keys, by distance. Between keys the rate is interpolated linearly; before the first and after the last it holds. Omitted or empty = no spin. |
 | `spin[].s` | m | Where this rate applies. |
-| `spin[].rate` | degrees/s | How fast the ball is carried round the tunnel if the player does not lean against it. Positive = to the player's right. Within ±180. Each echo jump flips the sign while it is non-zero. |
+| `spin[].rate` | degrees/s | How fast the ball is carried round the tunnel if the player does not lean against it. Positive = to the player's right. Within ±180. |
 
 Holes may touch or overlap; a point is open if it is inside any hole.
+Holes closer than 1.2 m **blend** into one opening (a smooth union), so
+there is never a seam where two holes meet and floor corners between them
+are rounded too. Rectangles stacked into a staircase still work; make the
+steps big and even, they read better than many small ones.
 
 ## Checks
 

@@ -73,7 +73,3 @@ func _echo(event: BallSimulation.SimEvent, accent: Color) -> void:
 ## End of the hit-stop: the ball takes off again.
 func _echo_takeoff(event: BallSimulation.SimEvent) -> void:
 	world.ball.kick(0.9)
-	if event.spin_flipped:
-		# The tunnel changes direction: a second wave from the far side and a whoosh.
-		world.tunnel.add_ripple(event.s, event.angle + PI, world.now(), 1.0)
-		synth.play_jump(1.0)

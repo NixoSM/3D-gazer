@@ -1,21 +1,30 @@
 // The tunnel wall, drawn like an old Flash game: flat bright colours, hard
 // two-tone shading, thick black outlines. No textures, no realistic lighting.
 //
-// Everything is computed from the fragment's world position, converted to
-// tunnel coordinates (s along the axis, angle around it), so the same maths
-// as the simulation drives the look:
-//   * colour        = palette sampled at s / level_length (you see upcoming colours ahead)
-//   * bands         = alternating light/dark rings that sell the speed; faster
-//                     levels get shorter bands, so they flicker past faster
+// The geometry is a plain tube. Holes are cut here, per pixel, from the same
+// signed-distance field the simulation uses (LevelData.floor_distance and
+// HoleData.signed_distance; keep the three in step): rounded corners, holes
+// that touch blend into one opening, slanted (twisted) holes have straight
+// diagonal edges. The outline is the band of floor nearest the edge, so it
+// only exists where there is floor: nothing floats in the void.
+//
+// Everything else is computed from the fragment's tunnel coordinates (s
+// along the axis, angle around it):
+//   * colour        = palette sampled at s / level_length
+//   * floor pattern = one of a few flat looks (see `pattern`); it slides
+//                     sideways with the ground spin, like a conveyor
 //   * contact shadow= a hard-edged blob under the ball
-//   * echo ripples  = bold outlined rings expanding *over the curved surface*;
-//                     they wrap around the tunnel and meet on the far side
-//   * best marker   = a black-and-white dashed ring where your best attempt ended
+//   * echo ripples  = bold outlined rings expanding over the curved surface
+//   * best marker   = a dashed ring where your best attempt ended
 //   * finish line   = a chequered band
 shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
 
 const int MAX_RIPPLES = 6;
+// Keep in step with HoleData.CORNER_RADIUS and LevelData.BLEND.
+const float CORNER_RADIUS = 0.6;
+const float BLEND = 1.2;
+const float REACH = BLEND + CORNER_RADIUS + 1.0;
 
 uniform sampler2D wall_gradient : source_color, filter_linear, repeat_disable;
 uniform sampler2D accent_gradient : source_color, filter_linear, repeat_disable;
@@ -23,11 +32,20 @@ uniform float level_length = 600.0;
 uniform float tunnel_radius = 4.0;
 uniform vec3 outline_color : source_color = vec3(0.04, 0.03, 0.06);
 
+// Holes: two RGBA float texels per hole, sorted by start:
+//   (s_start, length, angle_center, angle_width), (twist, 0, 0, 0)
+uniform sampler2D hole_data : filter_nearest, repeat_disable;
+// Which holes can touch this chunk of tube (set per chunk).
+instance uniform int hole_first = 0;
+instance uniform int hole_count = 0;
+
 // Look
-uniform float band_length = 3.0;       // metres per light/dark ring (shorter on faster levels)
-uniform float band_contrast = 0.16;    // how much darker the dark rings are
-uniform float stripe_count = 6.0;      // thin lane lines around the tunnel (0 = none)
+uniform int pattern = 1;               // 0 bands, 1 tiles, 2 stripes, 3 diamonds, 4 plain
+uniform float band_length = 3.0;       // metres per pattern repeat along the tunnel (shorter on faster levels)
+uniform float pattern_contrast = 0.14; // how much darker the dark parts of the pattern are
 uniform float shade_dark = 0.72;       // brightness of the "ceiling" half
+uniform float outline_width = 0.2;     // metres of black along every edge
+uniform float spin_offset = 0.0;       // radians the floor has slid with the spin
 
 // Ball (s, angle, height) and radius, for the contact shadow and shading.
 uniform vec3 ball = vec3(0.0);
@@ -62,6 +80,90 @@ float inside(float value, float threshold) {
 	return 1.0 - smoothstep(threshold - w, threshold + w, value);
 }
 
+// HoleData.signed_distance
+float hole_distance(vec4 a, float twist, float s, float angle) {
+	float half_length = a.y * 0.5;
+	float y = abs(s - (a.x + half_length)) - half_length;
+	if (a.w >= TAU - 0.0001) {
+		return y;
+	}
+	float slope = twist * tunnel_radius;
+	float slant = 1.0 / sqrt(1.0 + slope * slope);
+	float half_width = a.w * 0.5 * tunnel_radius;
+	float x = (abs(wrap_angle(angle - (a.z + twist * (s - a.x)))) * tunnel_radius - half_width) * slant;
+	float corner = min(CORNER_RADIUS, min(half_width * slant, half_length) * 0.9);
+	vec2 q = vec2(x, y) + corner;
+	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - corner;
+}
+
+// LevelData.smooth_min
+float smooth_min(float a, float b) {
+	float h = max(BLEND - abs(a - b), 0.0) / BLEND;
+	return min(a, b) - h * h * BLEND * 0.25;
+}
+
+// LevelData.floor_distance: > 0 on floor, < 0 over a hole.
+float floor_distance(float s, float angle) {
+	float d = 1e6;
+	for (int i = 0; i < hole_count; i++) {
+		int index = (hole_first + i) * 2;
+		vec4 a = texelFetch(hole_data, ivec2(index, 0), 0);
+		if (a.x > s + REACH || a.x + a.y < s - REACH) {
+			continue;
+		}
+		float twist = texelFetch(hole_data, ivec2(index + 1, 0), 0).x;
+		d = smooth_min(d, hole_distance(a, twist, s, angle));
+	}
+	return d;
+}
+
+// The floor's own look, before shading. `u` runs along the tunnel, `v`
+// around it (metres, sliding with the spin). Returns how dark (0..1).
+float floor_pattern(float u, float v, float distance_fade) {
+	float circumference = TAU * tunnel_radius;
+	if (pattern == 0) {
+		// Alternating rings, plus thin lanes.
+		float band = mod(floor(u / band_length), 2.0);
+		float lane_width = circumference / 6.0;
+		float lane = abs(fract(v / lane_width) - 0.5) * lane_width;
+		return band * distance_fade + inside(abs(lane - lane_width * 0.5), 0.04) * distance_fade * 2.5;
+	}
+	if (pattern == 1) {
+		// Big rounded tiles in a running bond, separated by soft seams.
+		float tiles_around = 10.0;
+		float tile_v = circumference / tiles_around;
+		float tile_u = band_length * 1.3;
+		float row = floor(u / tile_u);
+		float shifted = v + mod(row, 2.0) * tile_v * 0.5;
+		vec2 cell = vec2(mod(u, tile_u) - tile_u * 0.5, mod(shifted, tile_v) - tile_v * 0.5);
+		vec2 q = abs(cell) - vec2(tile_u, tile_v) * 0.5 + 0.09 + 0.35;
+		float box = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.35;
+		float seam = 1.0 - inside(box, 0.0);
+		// Alternate tiles a touch lighter, like a hand-painted floor.
+		float checker = mod(row + floor(shifted / tile_v), 2.0);
+		return (seam * 1.6 + checker * 0.45) * distance_fade;
+	}
+	if (pattern == 2) {
+		// Diagonal stripes wound around the tube like a barber's pole.
+		float period = 2.8;
+		float phase = (u * 0.65 + v) / period;
+		float stripe = abs(fract(phase) - 0.5) * period;
+		return inside(stripe, period * 0.22) * distance_fade * 1.3;
+	}
+	if (pattern == 3) {
+		// Rounded diamonds (an argyle of panels), alternate ones darker.
+		float size = 2.2;
+		vec2 p = vec2(u + v, v - u) * 0.70710678 / size;
+		vec2 cell = fract(p) - 0.5;
+		vec2 q = abs(cell) * size - size * 0.5 + 0.07 + 0.3;
+		float box = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.3;
+		float seam = 1.0 - inside(box, 0.0);
+		float checker = mod(floor(p.x) + floor(p.y), 2.0);
+		return (seam * 1.6 + checker * 0.7) * distance_fade;
+	}
+	return 0.0;
+}
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -69,27 +171,31 @@ void vertex() {
 void fragment() {
 	float s = -world_pos.z;
 	float angle = atan(world_pos.x, -world_pos.y);
+
+	// --- Cut the holes ------------------------------------------------------------
+	float d = floor_distance(s, angle);
+	// Screen-space size of the edge band. Measured on d clamped near the
+	// edge: far from any hole, d jumps where a hole enters this pixel's
+	// search range, and those jumps must not count as "edges".
+	float pixel = max(fwidth(min(d, 1.0)), 0.0001);
+	if (d < 0.0) {
+		discard;
+	}
+
 	float progress = clamp(s / level_length, 0.0, 1.0);
 	vec3 wall = texture(wall_gradient, vec2(progress, 0.5)).rgb;
 	vec3 accent = texture(accent_gradient, vec2(progress, 0.5)).rgb;
 	float arc = wrap_angle(angle - ball.y) * tunnel_radius;
+	float distance_to_camera = length(world_pos - CAMERA_POSITION_WORLD);
 
-	// --- Flat colour with alternating bands ------------------------------------
-	// Bands fade out in the distance, where they would shimmer (aliasing).
-	float band = mod(floor(s / band_length), 2.0);
-	float band_fade = 1.0 - smoothstep(25.0, 55.0, length(world_pos - CAMERA_POSITION_WORLD));
-	vec3 color = wall * (1.0 - band * band_contrast * band_fade);
-
-	// Thin lane lines along the tunnel. Like the bands they fade with distance:
-	// far away they are thinner than a pixel and would break up into dashes.
-	if (stripe_count > 0.0) {
-		float lane = abs(fract(angle / TAU * stripe_count) - 0.5) * TAU * tunnel_radius / stripe_count;
-		float lane_fade = 1.0 - smoothstep(30.0, 70.0, length(world_pos - CAMERA_POSITION_WORLD));
-		color = mix(color, wall * 0.55, inside(abs(lane - TAU * tunnel_radius / stripe_count * 0.5), 0.04) * lane_fade);
-	}
+	// --- Flat colour and the floor pattern ---------------------------------------
+	// Patterns fade out in the distance, where they would shimmer.
+	float pattern_fade = 1.0 - smoothstep(28.0, 60.0, distance_to_camera);
+	float v = wrap_angle(angle - spin_offset) * tunnel_radius + PI * tunnel_radius;
+	vec3 color = wall * (1.0 - clamp(floor_pattern(s, v, pattern_fade), 0.0, 1.6) * pattern_contrast);
 
 	// --- Hard two-tone shading: the half of the tunnel above the ball is darker,
-	// with a black-ish terminator line, like a cel-shaded cartoon.
+	// like a cel-shaded cartoon.
 	float facing = cos(wrap_angle(angle - ball.y));
 	float lit = 1.0 - inside(facing, -0.15);
 	color *= mix(shade_dark, 1.0, lit);
@@ -116,10 +222,10 @@ void fragment() {
 
 	// --- Best run marker: dashed black/white ring --------------------------------
 	if (best_s > 0.0) {
-		float d = abs(s - best_s);
+		float db = abs(s - best_s);
 		float dash = step(0.5, fract(angle / TAU * 32.0));
-		color = mix(color, outline_color, inside(d, 0.16));
-		color = mix(color, mix(vec3(1.0), accent, dash), inside(d, 0.1));
+		color = mix(color, outline_color, inside(db, 0.16));
+		color = mix(color, mix(vec3(1.0), accent, dash), inside(db, 0.1));
 	}
 
 	// --- Finish line: chequered band ------------------------------------------------
@@ -129,22 +235,19 @@ void fragment() {
 		color = mix(vec3(1.0), outline_color, check);
 	}
 
-	// --- Hole rims and outline strips are solid black --------------------------------
-	if (COLOR.r > 0.5 || COLOR.g > 0.5) {
-		color = outline_color;
-	}
+	// --- Edges: a lighter lip, then the thick black outline -------------------------
+	// Never thinner than ~2 pixels, so at grazing angles the floor still
+	// ends in a clean black line instead of breaking up.
+	float outline = max(outline_width, pixel * 2.0);
+	// A crisp, lighter lip just inside the outline, like the bevel on a
+	// cut-out cartoon platform (hard edged: no glow).
+	float lip = 1.0 - smoothstep(outline + 0.22 - pixel, outline + 0.22 + pixel, d);
+	color = mix(color, mix(color, vec3(1.0), 0.2), lip);
+	color = mix(color, outline_color, 1.0 - smoothstep(outline - pixel, outline + pixel, d));
 
-	// --- Distance fades into the void colour ------------------------------------------
-	// Measured along the tunnel and stepped once per band, so each band is one
-	// flat tone and the steps coincide with band edges: no extra lines, and
-	// nothing cutting across holes. Far away (where the bands are thinner
-	// than a few pixels) it becomes a smooth fade to avoid shimmer.
+	// --- Distance fades into the void colour, along the tunnel ---------------------
 	float ahead = s + CAMERA_POSITION_WORLD.z;
-	float band_mid = (floor(s / band_length) + 0.5) * band_length + CAMERA_POSITION_WORLD.z;
-	float fog_smooth = smoothstep(fog_distance * 0.3, fog_distance, ahead);
-	float fog_stepped = smoothstep(fog_distance * 0.3, fog_distance, band_mid);
-	float fog = mix(fog_stepped, fog_smooth, smoothstep(45.0, 70.0, ahead));
-	color = mix(color, fog_color, fog);
+	color = mix(color, fog_color, smoothstep(fog_distance * 0.3, fog_distance, ahead));
 	color = mix(color, fade_color, fade);
 
 	ALBEDO = color;

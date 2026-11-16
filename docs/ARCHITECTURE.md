@@ -65,12 +65,20 @@ it that way: no `randf()`, no wall-clock time, no reading nodes.
 `TunnelView` keeps geometry only around the camera: 18 m chunks (plus a
 0.3 m overlap each side, which hides the seams) from one chunk behind to
 150 m ahead, at most two new ones built a frame.
-`TunnelMeshBuilder` lays a grid on the chunk whose lines include every
-hole edge, so each cell is entirely wall or entirely hole, then adds rim
-faces wherever wall meets hole, through the shell thickness
-`TunnelMath.WALL_THICKNESS` that the simulation also uses for falls. All
-chunks share one `ShaderMaterial`;
-per-frame inputs (ball position, ripples, fog colour, fade) are uniforms.
+`TunnelMeshBuilder` builds a plain tube (rows fully inside a ring hole are
+left out). Holes are cut **per pixel** in `tunnel.gdshader` from a signed
+distance field: each hole is a rounded box on the unrolled wall (sheared
+when it is twisted), and holes are combined with a smooth minimum, so
+touching holes merge without seams and every corner is rounded. The very
+same field is `LevelData.floor_distance()`, which the simulation uses to
+drop the ball and to collide it with the edge of the cut (via the field's
+gradient). Keep `HoleData.signed_distance`, `LevelData.floor_distance` and
+the shader's copies in step. The black outline is the band of floor within
+0.2 m of an edge (never under two pixels wide), so it only exists where
+there is floor. Hole parameters go to the shader in one float texture;
+each chunk gets the index range of the holes that can reach it as
+instance uniforms. All chunks share one `ShaderMaterial`; per-frame inputs
+(ball position, ripples, fog colour, fade, spin offset) are uniforms.
 
 The Mobile renderer is used on device. Every shader is unshaded with
 hand-written flat (cel) shading, so the look is the same on the Mobile and

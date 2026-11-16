@@ -29,7 +29,38 @@ func test_hole_contains_wraps_around_seam() -> void:
 	assert_true(hole.contains(5.0, deg_to_rad(5.0), 4.0), "5° is inside a hole centred on 350° ± 20°")
 	assert_true(hole.contains(5.0, deg_to_rad(340.0), 4.0))
 	assert_false(hole.contains(5.0, deg_to_rad(15.0), 4.0))
-	assert_eq(hole.angle_ranges().size(), 2, "seam-crossing hole splits into two ranges")
+
+
+func test_round_trip_keeps_twist() -> void:
+	var holes: Array[HoleData] = [HoleData.new(40.0, 20.0, deg_to_rad(90.0), deg_to_rad(250.0), deg_to_rad(4.0))]
+	var parsed := LevelSerializer.from_json(LevelSerializer.to_json(make_level(holes)))
+	assert_true(parsed.ok(), "round trip errors: %s" % [parsed.errors])
+	assert_near(parsed.level.holes[0].twist, deg_to_rad(4.0), 0.0005)
+
+
+func test_twisted_hole_follows_its_slant() -> void:
+	# 40° wide, turning 3°/m: 10 m in, its centre is 30° further round.
+	var holes: Array[HoleData] = [HoleData.new(10.0, 20.0, 0.0, deg_to_rad(40.0), deg_to_rad(3.0))]
+	var level := make_level(holes)
+	assert_true(level.is_hole(20.0, deg_to_rad(30.0)), "centre line has moved")
+	assert_false(level.is_hole(20.0, 0.0), "where it started is floor again")
+	assert_true(level.is_hole(11.0, deg_to_rad(3.0)))
+
+
+func test_corners_are_rounded() -> void:
+	var holes: Array[HoleData] = [HoleData.new(10.0, 6.0, 0.0, deg_to_rad(90.0))]
+	var level := make_level(holes)
+	var edge := deg_to_rad(45.0) - 0.05 / level.tunnel_radius
+	assert_true(level.is_hole(13.0, edge), "straight edge is exact")
+	assert_false(level.is_hole(10.05, edge), "the very corner is rounded off")
+
+
+func test_touching_holes_merge_without_a_seam() -> void:
+	# Two holes meeting end to end: no sliver of floor where they touch.
+	var holes: Array[HoleData] = [HoleData.new(10.0, 5.0, 0.0, deg_to_rad(120.0)), HoleData.new(15.0, 5.0, 0.0, deg_to_rad(120.0))]
+	var level := make_level(holes)
+	for degrees in [-55.0, -30.0, 0.0, 30.0, 55.0]:
+		assert_true(level.floor_distance(15.0, deg_to_rad(degrees)) < -0.1, "seam at %.0f° is open" % degrees)
 
 
 func test_hole_lookup_finds_long_hole_started_earlier() -> void:

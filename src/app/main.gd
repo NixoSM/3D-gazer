@@ -26,7 +26,6 @@ var level_index := 0
 
 func _ready() -> void:
 	_load_levels()
-	session.sim_event.connect(_on_sim_event)
 	session.run_failed.connect(_on_run_failed)
 	session.run_completed.connect(_on_run_completed)
 	hud.pause_pressed.connect(_pause)
@@ -203,18 +202,6 @@ func _retry(immediate: bool = false) -> void:
 
 
 # --- Session events ------------------------------------------------------------
-
-func _on_sim_event(event: BallSimulation.SimEvent) -> void:
-	match event.type:
-		BallSimulation.EventType.JUMPED:
-			if event.spin_flipped:
-				hud.set_spin(session.simulation.spin_rate(), true)
-		BallSimulation.EventType.ECHO_HIT:
-			var color := world.palette.accent_at(levels[level_index].progress_at(event.s))
-			hud.show_chain(event.chain, event.perfect, color)
-		BallSimulation.EventType.CHAIN_BROKEN:
-			hud.hide_chain()
-
 
 func _on_run_failed(progress: float) -> void:
 	var level := levels[level_index]

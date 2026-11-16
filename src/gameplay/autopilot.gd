@@ -203,7 +203,7 @@ func _raw_blocked_between(s0: float, s1: float, angle: float) -> bool:
 
 
 func _blocked(s: float, angle: float) -> bool:
-	return level.hole_at(s, angle) != null
+	return level.is_hole(s, angle)
 
 
 func _is_ring(s: float) -> bool:
