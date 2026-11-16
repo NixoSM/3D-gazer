@@ -1,0 +1,100 @@
+# Builds an UNSIGNED .ipa of the game for sideloading (Sideloadly, AltStore…).
+# Those tools re-sign the app with your own Apple ID, so no certificates or
+# secrets are needed here. For TestFlight / App Store use a signed Xcode
+# build instead (docs/BUILDING_IOS.md).
+#
+# Download: Actions → "iOS ipa" → latest run → Artifacts → Gazer-ipa.
+name: iOS ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - .github/workflows/ios-ipa.yml
+      - export_presets.cfg
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      GODOT_VERSION: 4.5.1
+      # Any 10-character value: Godot refuses to export without one, and the
+      # build below is unsigned anyway. Sideloadly applies your real team.
+      PLACEHOLDER_TEAM_ID: ABCDE12345
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot and iOS export templates
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/Library/Application Support/Godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-macos-ios
+
+      - name: Install Godot and the iOS export template
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot
+          curl -sSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -q godot.zip -d ~/godot
+          curl -sSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          dest="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          # Only the iOS template is needed (the full archive is ~1.3 GB).
+          unzip -q -j templates.tpz templates/ios.zip templates/version.txt -d "$dest"
+          rm godot.zip templates.tpz
+
+      - name: Export the Xcode project
+        run: |
+          set -euo pipefail
+          GODOT=~/godot/Godot.app/Contents/MacOS/Godot
+          sed -i '' "s/^application\/app_store_team_id=\"\"/application\/app_store_team_id=\"${PLACEHOLDER_TEAM_ID}\"/" export_presets.cfg
+          $GODOT --headless --import || true
+          mkdir -p build/ios
+          $GODOT --headless --export-release "iOS" build/ios/Gazer.ipa
+          test -d build/ios/Gazer.xcodeproj
+
+      - name: Build the app (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project build/ios/Gazer.xcodeproj \
+            -scheme Gazer \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/derived \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            | tail -n 40
+
+      - name: Package the .ipa
+        run: |
+          set -euo pipefail
+          app=build/derived/Build/Products/Release-iphoneos/Gazer.app
+          test -x "$app/Gazer"
+          mkdir -p build/package/Payload
+          cp -R "$app" build/package/Payload/
+          (cd build/package && zip -qry ../Gazer-unsigned.ipa Payload)
+          ls -lh build/Gazer-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gazer-ipa
+          path: build/Gazer-unsigned.ipa
+          compression-level: 0
+          retention-days: 30
