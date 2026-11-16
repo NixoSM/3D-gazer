@@ -1,6 +1,5 @@
 # Gazer
 
-*A tunnel that turns around you.*
 
 You are a striped cartoon ball rolling down a bright, flat-coloured tunnel. Tilt the phone and the
 ball rolls across the wall as if you had tilted the floor; the camera turns
