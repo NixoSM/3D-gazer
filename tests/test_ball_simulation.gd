@@ -134,7 +134,7 @@ func test_spin_carries_the_ball_sideways() -> void:
 	var sim := BallSimulation.new(spin_level(30.0), make_tuning())
 	run(sim, 4.0)
 	var turned := rad_to_deg(TunnelMath.angle_difference(sim.angle, 0.0))
-	# Starts at rest and relaxes to 30°/s with a ~0.9 s time constant.
+	# Starts at rest and relaxes to 30°/s (time constant 1 / rolling_resistance).
 	assert_true(turned > 60.0 and turned < 120.0, "4 s of 30°/s spin turned %.0f°" % turned)
 	assert_near(sim.spin_rate(), 30.0, 0.001)
 
@@ -144,8 +144,7 @@ func test_counter_tilt_holds_against_spin() -> void:
 	var sim := BallSimulation.new(spin_level(30.0), tuning)
 	# Tilt that exactly cancels the drift: a = flow * resistance.
 	var flow := deg_to_rad(30.0) * 4.0
-	var needed := flow * tuning.rolling_resistance / (tuning.rolling_factor * tuning.gravity)
-	var tilt := -asin(needed) / tuning.max_tilt_radians()
+	var tilt := -flow * tuning.rolling_resistance / tuning.steering_acceleration
 	run(sim, 4.0, InputFrame.new(tilt))
 	assert_true(absf(sim.lateral_speed) < 0.05, "balanced: lateral speed %.3f" % sim.lateral_speed)
 

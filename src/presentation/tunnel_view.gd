@@ -72,7 +72,6 @@ func set_level(p_level: LevelData, p_palette: LevelPalette, tuning: BallTuning) 
 	_set_both("band_length", band_length_for(level))
 	_set_both("hole_data", hole_texture(level))
 	material.set_shader_parameter("pattern", pattern)
-	set_spin_offset(0.0)
 
 
 ## The level's holes packed for the shader: two RGBA float texels each,
@@ -90,11 +89,6 @@ static func hole_texture(level: LevelData) -> ImageTexture:
 		data[i * 8 + 4] = hole.twist
 	var image := Image.create_from_data(count * 2, 1, false, Image.FORMAT_RGBAF, data.to_byte_array())
 	return ImageTexture.create_from_image(image)
-
-
-## How far (radians) the floor pattern has slid with the ground spin.
-func set_spin_offset(radians: float) -> void:
-	_set_both("spin_offset", wrapf(radians, -PI, PI))
 
 
 ## Faster levels get shorter light/dark bands, so the rings flicker past

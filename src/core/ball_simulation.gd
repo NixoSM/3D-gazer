@@ -223,8 +223,7 @@ func _step_lateral(dt: float, tilt: float) -> void:
 			authority = tuning.air_control
 			# The air inside the tunnel turns with it, so the spin still applies.
 			flow = spin_speed()
-	var slope := clampf(tilt, -1.0, 1.0) * tuning.max_tilt_radians()
-	var acceleration := tuning.rolling_factor * tuning.gravity * sin(slope) * authority
+	var acceleration := tuning.tilt_acceleration(tilt) * authority
 	lateral_speed += acceleration * dt
 	lateral_speed = flow + (lateral_speed - flow) * exp(-tuning.rolling_resistance * dt)
 	var cap := tuning.max_lateral_speed + absf(flow)

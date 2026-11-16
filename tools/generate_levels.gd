@@ -54,16 +54,21 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	dawn.display_name = "Dawn"
 	dawn.seed = 1107
 	dawn.base_speed = 13.65
+	# Slow, so holes are drawn bigger (easier to read from afar) and the
+	# floor between ideas is short: something to do every second.
+	dawn.intro_seconds = 2.0
+	dawn.breather = 0.6
+	dawn.hole_scale = 1.4
 	dawn.sections = [
 		{"p": "gate", "n": 3, "i": 0.1},                       # lean into the gap
-		{"p": "ring", "n": 2, "i": 0.1, "rest": 1.4},          # swipe to jump
+		{"p": "ring", "n": 2, "i": 0.1, "rest": 0.9},          # swipe to jump
 		{"p": "gate", "n": 2, "i": 0.25},
 		{"p": "split", "n": 1, "i": 0.25},
-		{"p": "echo_run", "n": 3, "i": 0.2, "rest": 1.6},     # tap as you land
+		{"p": "echo_run", "n": 3, "i": 0.2, "rest": 0.9},     # tap as you land
 		{"p": "gate", "n": 3, "i": 0.3, "spin": 8.0, "ramp": 2.0},  # the tunnel starts to turn
 		{"p": "slalom", "n": 4, "i": 0.2},
-		{"p": "bridge", "n": 10, "i": 0.25},
-		{"p": "rest", "secs": 1.0},
+		{"p": "bridge", "n": 8, "i": 0.25},
+		{"p": "combo", "n": 1, "i": 0.25},
 		{"p": "echo_run", "n": 4, "i": 0.3, "spin": 12.0},
 		{"p": "combo", "n": 2, "i": 0.3},
 		{"p": "funnel", "n": 4, "i": 0.3},
@@ -87,19 +92,21 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	tide.display_name = "Tide"
 	tide.seed = 2214
 	tide.base_speed = 17.5
+	tide.intro_seconds = 2.0
+	tide.breather = 0.6
+	tide.hole_scale = 1.1
 	tide.sections = [
 		{"p": "gate", "n": 2, "i": 0.3, "spin": 15.0, "ramp": 1.5},
 		{"p": "slalom", "n": 4, "i": 0.35},
 		{"p": "ring", "n": 2, "i": 0.4},
 		{"p": "gate", "n": 2, "i": 0.4, "spin": -20.0, "ramp": 0.6},  # the tide turns
-		{"p": "pad_run", "n": 4, "i": 0.35, "rest": 1.3},
+		{"p": "pad_run", "n": 4, "i": 0.35, "rest": 0.8},
 		{"p": "corkscrew", "n": 12, "i": 0.4},
 		{"p": "combo", "n": 2, "i": 0.45},
 		{"p": "split", "n": 2, "i": 0.5, "spin": 28.0, "ramp": 0.5},
-		{"p": "rest", "secs": 1.0},
 		{"p": "funnel", "n": 5, "i": 0.5},
 		{"p": "pad_run", "n": 5, "i": 0.5},
-		{"p": "slalom", "n": 5, "i": 0.55, "spin": -30.0, "ramp": 0.4},
+		{"p": "slalom", "n": 5, "i": 0.55, "spin": -30.0, "ramp": 0.8},
 		{"p": "corkscrew", "n": 14, "i": 0.55},
 		{"p": "echo_run", "n": 5, "i": 0.6},
 		{"p": "gate", "n": 4, "i": 0.6},
@@ -120,6 +127,9 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	ember.seed = 3391
 	ember.base_speed = 21.0
 	ember.intro_seconds = 2.5
+	# The ball steers quicker than when Ember was first tuned: less floor
+	# between ideas keeps it the hardest of the three.
+	ember.breather = 0.75
 	ember.sections = [
 		{"p": "gate", "n": 3, "i": 0.6, "spin": 25.0, "ramp": 1.0},
 		{"p": "slalom", "n": 4, "i": 0.65},

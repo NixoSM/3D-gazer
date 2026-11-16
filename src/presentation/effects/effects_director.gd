@@ -30,10 +30,11 @@ func _on_event(event: BallSimulation.SimEvent) -> void:
 				world.ball.kick(0.6 + fraction * 0.6)
 		E.LANDED:
 			# Tiny dips (teetering on an edge) are not landings worth a thud.
+			# A plain landing is sober: a squash, a soft thud, a tap of haptic.
+			# The wave on the floor belongs to the echo alone.
 			if not event.echo and event.height > 2.5:
-				world.tunnel.add_ripple(event.s, event.angle, world.now(), 0.28)
-				world.ball.kick(-1.4)
-				synth.play_land(0.8)
+				world.ball.kick(-0.8)
+				synth.play_land(0.35)
 				Platform.haptic(Platform.Haptic.LIGHT)
 		E.CHAIN_BROKEN:
 			pass

@@ -33,7 +33,9 @@ static func build_chunk(level: LevelData, chunk_start: float, chunk_end: float, 
 	for i in rows:
 		var sa := s0 + (s1 - s0) * i / rows
 		var sb := s0 + (s1 - s0) * (i + 1) / rows
-		if _inside_ring(rings, sa, sb):
+		# Only the inner tube may skip rows: a ray through a ring can still
+		# meet a cut face inside the shell beyond it.
+		if radius_offset == 0.0 and _inside_ring(rings, sa, sb):
 			continue
 		var base := vertices.size()
 		for k in ANGULAR_SEGMENTS + 1:

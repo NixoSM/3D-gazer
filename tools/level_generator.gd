@@ -41,6 +41,7 @@ var script_end: float = INF
 var sections_used: int = 0
 ## Prints where each section starts and how long it lasts.
 var verbose := false
+var _spec: Spec
 
 
 class Spec:
@@ -53,6 +54,12 @@ class Spec:
 	var tunnel_radius: float = 4.0
 	## Seconds of empty tunnel at the start, to settle in.
 	var intro_seconds: float = 3.5
+	## Scales the default floor between sections and between repeats
+	## (1 = roomy; lower = busier, less plain scrolling).
+	var breather: float = 1.0
+	## Scales hole lengths. Slow levels need bigger holes: at low speed a
+	## short hole is a thin sliver in the distance and hard to spot.
+	var hole_scale: float = 1.0
 	## The level, in order. Each section is a Dictionary:
 	##   p      pattern name (see PATTERNS)
 	##   n      how many (gates, rings, bounces, segments…; pattern-specific)
@@ -67,6 +74,7 @@ class Spec:
 
 func generate(spec: Spec, tuning: BallTuning) -> LevelData:
 	_rng.seed = spec.seed
+	_spec = spec
 	_tuning = tuning
 	_path_angle = 0.0
 	_spread = 0.0
@@ -100,7 +108,7 @@ func generate(spec: Spec, tuning: BallTuning) -> LevelData:
 		if verbose:
 			print("    %-10s n=%-2d i=%.2f  %5.1f s  %4.1f s long" % [section.get("p", "gate"), section.get("n", 1), intensity,
 				_level.progress_at(section_start) * spec.duration_seconds, (s - section_start) / _level.speed_at(s)])
-		var rest: float = section.get("rest", lerpf(1.1, 0.55, intensity))
+		var rest: float = section.get("rest", lerpf(1.1, 0.55, intensity) * spec.breather)
 		s += _level.speed_at(s) * rest
 	if s < end:
 		script_end = s
@@ -151,7 +159,7 @@ func _repeat(n: int, s: float, intensity: float, place: Callable, gap_seconds: f
 		s = place.call(s, intensity)
 		_last_end = s
 		if k < n - 1:
-			s += _level.speed_at(s) * gap_seconds
+			s += _level.speed_at(s) * gap_seconds * _spec.breather
 	return s
 
 
@@ -177,14 +185,16 @@ func _ensure_lead(s: float, change: float, intensity: float = 0.3, slack: float 
 	var turn := maxf(absf(change) - slack, deg_to_rad(8.0)) + _spread
 	var arc := turn * _level.tunnel_radius
 	var spin_hold := absf(deg_to_rad(_spin_rate)) * _level.tunnel_radius * _tuning.rolling_resistance
-	var comfortable_acceleration := maxf(lerpf(5.5, 8.5, intensity) - spin_hold * 0.5, 3.0)
+	var comfortable_acceleration := maxf(lerpf(0.25, 0.45, intensity) * _tuning.steering_acceleration - spin_hold * 0.5, 3.0)
 	var seconds := 2.0 * sqrt(arc / comfortable_acceleration) + 0.2
 	var needed := _last_end + _level.speed_at(s) * seconds
 	return maxf(s, needed)
 
 
+## How much to scale hole lengths at s: faster means longer, so a hole takes
+## about as long to cross whatever the speed.
 func _speed_scale(s: float) -> float:
-	return _level.speed_at(s) / REFERENCE_SPEED
+	return _level.speed_at(s) / REFERENCE_SPEED * _spec.hole_scale
 
 
 func _add_hole(s: float, length: float, center: float, width: float) -> void:
@@ -195,11 +205,14 @@ func _degrees(min_degrees: float, max_degrees: float, intensity: float) -> float
 	return deg_to_rad(lerpf(min_degrees, max_degrees, intensity))
 
 
-## A wide hole with one gap: steer into the gap.
+## A wide hole with one gap: steer into the gap. The gap always opens just
+## beyond where the last one was, so every gate asks for a lean: a gate
+## the ball would roll through untouched is only scenery.
 func _place_gate(s: float, intensity: float) -> float:
 	var previous := _path_angle
-	_drift_path(_level.speed_at(s) * 1.0, intensity)
 	var gap := deg_to_rad(lerpf(170.0, 70.0, intensity) + _rng.randf_range(-12.0, 12.0))
+	var shift := gap * 0.5 + _degrees(5.0, 25.0, _rng.randf())
+	_path_angle = TunnelMath.wrap_angle_positive(_path_angle + shift * (1.0 if _rng.randf() < 0.5 else -1.0))
 	s = _ensure_lead(s, TunnelMath.angle_difference(_path_angle, previous), intensity, gap * 0.3)
 	_spread = 0.0
 	var length := lerpf(4.0, 8.0, _rng.randf()) * _speed_scale(s)
@@ -233,7 +246,8 @@ func _place_echo_run(s: float, intensity: float, count: int, pads: bool) -> floa
 	var pad_width := _degrees(125.0, 84.0, intensity)
 	for i in count:
 		var period := _level.speed_at(s) * air_time
-		var landing := lerpf(4.4, 3.2, intensity) * _speed_scale(s)
+		# Landing strips follow speed only: a bigger hole_scale means bigger holes here.
+		var landing := lerpf(4.4, 3.2, intensity) * _level.speed_at(s) / REFERENCE_SPEED
 		var hole_length := period - landing
 		# Hole sits in the middle of the jump arc, leaving a landing strip.
 		_add_hole(s + landing * 0.5, hole_length, 0.0, TAU)
@@ -302,7 +316,7 @@ func _place_slalom(s: float, intensity: float, count: int) -> float:
 			_path_angle = TunnelMath.wrap_angle_positive(center + offset * side)
 			_last_end = s
 			# Only the part of the swing the two gaps do not overlap must be steered.
-			s = _ensure_lead(s + _level.speed_at(s) * 0.12, TunnelMath.angle_difference(_path_angle, previous), intensity, gap * 0.75)
+			s = _ensure_lead(s + _level.speed_at(s) * 0.12, TunnelMath.angle_difference(_path_angle, previous), intensity, gap * 0.6)
 	return s
 
 

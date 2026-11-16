@@ -12,16 +12,18 @@ extends Resource
 @export var gravity: float = 34.0
 
 @export_group("Tilt")
-## Phone tilt (in degrees) that counts as "fully tilted".
-@export_range(5.0, 80.0) var max_tilt_degrees: float = 32.0
-## A solid sphere rolling down a slope accelerates at 5/7 g sin(θ).
-@export var rolling_factor: float = 5.0 / 7.0
+## Sideways acceleration at full tilt, m/s². Tilt gives acceleration, not
+## velocity, like a ball on a tilted plane, but steeper than real physics
+## would allow (a rolling ball on a 32° slope manages ~13 m/s²): a quick
+## ball makes for sharper, flashier lines.
+@export var steering_acceleration: float = 30.0
 ## Exponential decay of lateral speed per second. Low = icy, high = sticky.
-@export var rolling_resistance: float = 1.15
+## Also how quickly the ball settles once the phone is level again.
+@export var rolling_resistance: float = 2.4
 ## Cap on sideways speed, m/s.
 @export var max_lateral_speed: float = 13.0
 ## Fraction of tilt authority kept while airborne.
-@export_range(0.0, 1.0) var air_control: float = 0.45
+@export_range(0.0, 1.0) var air_control: float = 0.7
 
 @export_group("Jump")
 ## Jump height (m) for the smallest recognised swipe.
@@ -64,5 +66,6 @@ extends Resource
 @export_range(0.0, 1.0) var wall_restitution: float = 0.3
 
 
-func max_tilt_radians() -> float:
-	return deg_to_rad(max_tilt_degrees)
+## Sideways acceleration (m/s²) for a tilt in [-1, 1].
+func tilt_acceleration(tilt: float) -> float:
+	return clampf(tilt, -1.0, 1.0) * steering_acceleration

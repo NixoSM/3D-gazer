@@ -12,7 +12,8 @@ values quoted here are the defaults at the time of writing.
    the floor and the world turns around you. This is the game's identity;
    never smooth or lag the roll.
 2. **Physical, readable motion.** Tilt is a slope, not a joystick. The ball
-   accelerates, coasts and slows like a real ball on a tilted plane.
+   accelerates, coasts and slows like a ball on a tilted plane, only
+   quicker than real physics allows, so it can carve sharp lines.
 3. **Rhythm is rewarded.** The echo turns jumping into a beat: swipe once,
    then tap on each landing. Good timing is felt in light, sound and touch.
 4. **Colour is progress.** No progress bar. The tunnel's palette moves from
@@ -22,7 +23,7 @@ values quoted here are the defaults at the time of writing.
 
 | Gesture | Effect |
 |---|---|
-| Tilt left/right | Lateral acceleration `5/7 · g · sin(tilt)`, the acceleration of a solid sphere rolling down a slope. Rolling resistance decays lateral speed exponentially (`1.15/s`), so releasing the tilt lets the ball coast. 32° of phone tilt is full tilt; airborne, the ball keeps 45% of tilt authority. |
+| Tilt left/right | Lateral acceleration proportional to tilt, 30 m/s² at full tilt (`BallTuning.steering_acceleration`; a real ball rolling down a 32° slope manages ~13). Rolling resistance decays lateral speed exponentially (`2.4/s`), so releasing the tilt lets the ball coast briefly, then settle. Lateral speed is capped at 13 m/s; airborne, the ball keeps 70% of tilt authority. The ball was made this quick on purpose, to leave room for harder, flashier levels. |
 | Swipe up | Jump. Height scales with swipe length: 3.5% of the screen height is the minimum swipe (0.7 m), 28% is a full swipe (3.4 m). Long swipes fire as soon as they reach full length; others fire on release. |
 | Tap while landing | **Echo**: repeat the last jump exactly. Accepted from 0.20 s before touchdown to 0.10 s after. Within 0.06 s of touchdown it is **perfect**. Taps register on touch-down, not release, because timing matters. The echo lands with a **hit-stop**: the world freezes for 0.14 s while the shockwave keeps spreading, so the player registers the hit. A swipe during the freeze replaces the echo's height (and ends the freeze at once); while a finger is still down the freeze waits for it, up to 0.30 s. The echo also **resets sideways momentum**: the ball takes off sideways at 4 m/s times the tilt held at that moment, so a tilt during the freeze acts at once instead of fighting the old drift. |
 
@@ -50,9 +51,10 @@ instead of towards zero, and the air inside the tunnel turns with it.
 
 The spin never changes direction on its own: only the level data turns it.
 (An earlier build flipped it on every echo; Nicola dropped that after
-playing it.) The floor pattern slides sideways with the spin, like a
-conveyor, so the push can be seen, and a HUD marker under the pause button
-shows it too: one to three chevrons pointing the way the ball is carried.
+playing it.) The floor pattern is fixed to the wall like the holes (an
+earlier build slid it with the spin, like a conveyor, which made the holes
+seem to wander). A HUD marker under the pause button shows the spin: one to
+three chevrons pointing the way the ball is carried.
 
 ## Holes and failure
 
@@ -115,9 +117,15 @@ part of play.
 The three levels:
 
 - **Dawn** teaches one idea at a time (lean, jump, echo), then introduces a
-  gentle spin (8 to 12 °/s).
+  gentle spin (8 to 12 °/s). It is slow, so its holes are drawn 1.4× longer
+  (`Spec.hole_scale`): at low speed a short hole is a thin sliver in the
+  distance and hard to spot.
 - **Tide** is about currents: the spin is on from the start and the tide
   turns (+15, −20, +28, −30 °/s), with pad runs and corkscrews.
+Every gate's gap opens just beyond the previous one, so each asks for a
+lean, and Dawn and Tide start after 2 s and keep 0.6× the usual floor
+between ideas (`Spec.breather`): there is little plain scrolling.
+
 - **Ember** is the test: 21 to 25 m/s, spin from 25 up to 50 °/s that snaps
   round in a quarter of a second, narrow bridges, combos and long pad runs,
   and almost no rest.
@@ -125,16 +133,19 @@ The three levels:
 `LevelValidator` rejects any gap that cannot be jumped at the local speed.
 Tests play every level to the end with `Autopilot`, both perfectly and with
 a **0.2 s reaction delay** on its steering (roughly a person's). The delay
-the bot can survive measures difficulty: Dawn still finishes at 0.45 s,
-Tide fails from 0.4 s, Ember from 0.25 s.
+the bot can survive measures difficulty: Dawn finishes at 0.35 s, Tide
+fails from 0.35 s, Ember from 0.3 s. (The bot steers with fixed, person-like
+gains in m/s², so a quicker ball does not make it a better player.)
 
 ## Feel ("juice") inventory
 
 All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
 
-- Normal landing: a soft ripple, the ball squashes, a low thud, a light haptic.
-- Echo: the hit-stop, then a bold ring that expands *over the cylinder*, wrapping around the
-  tunnel to meet itself on the far side. The ball flashes in the accent colour, the FOV kicks, a
+- Normal landing: deliberately sober. The ball squashes, a soft thud, a
+  light haptic, nothing on the floor.
+- Echo: the hit-stop, then a wave spreads *over the cylinder* and lights up
+  whole floor tiles as it reaches them (accent colour, black seams),
+  wrapping around the tunnel to meet itself on the far side. The ball flashes in the accent colour, the FOV kicks, a
   glassy note plays (D-major pentatonic, one step higher per echo in the
   chain) and a medium haptic fires. A perfect echo adds a bell overtone, a
   brighter wave and a heavy haptic. (No streak counter or PERFECT popup:
@@ -143,7 +154,7 @@ All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
 - Fall: a falling tone, a small camera shake, a heavy haptic, then a fade.
   Hitting the wall of the cut on the way down adds a thud, a squash, a
   shake and a medium haptic.
-- Finish: a huge ripple, a rising arpeggio, a success haptic, the results screen.
+- Finish: a huge tile wave, a rising arpeggio, a success haptic, the results screen.
 
 ## Visual language
 
@@ -153,14 +164,12 @@ thick black outlines. No textures, no realistic lighting, no glow.
 - **Tunnel**: one flat colour at a time, taken from the level palette by
   progress, with a two-tone floor pattern (default: big rounded tiles in a
   running bond; stripes, diamonds, plain and the old rings are the other
-  choices, `TunnelView.pattern`). The pattern slides sideways with the
-  ground spin. The half of the tunnel opposite the ball is a flat darker
+  choices, `TunnelView.pattern`). The pattern is fixed to the wall. The half of the tunnel opposite the ball is a flat darker
   tone (cel shading), which keeps "down" obvious as the world turns.
   Distance fades smoothly into the void colour along the tunnel.
 - **Holes**: show a flat, strongly contrasting void colour with a few
-  blinking cartoon stars. Every edge of floor gets a thick black outline
-  and, just inside it, a crisp lighter lip, like a cut-out cartoon
-  platform. Through a hole you see the cut faces of the shell (0.8 m
+  blinking cartoon stars. Every edge of floor gets a thick black outline,
+  like a cut-out cartoon platform. Through a hole you see the cut faces of the shell (0.8 m
   thick), in a darker tone of the wall with a black line at the back, so
   every platform reads as a solid slab. The floor tiles' seams carry on
   down the faces, so each tile reads as a block (`TunnelView.face_style`
@@ -177,7 +186,7 @@ thick black outlines. No textures, no realistic lighting, no glow.
   with one hard shadow step, a solid white shine spot and a thick black
   outline. Looks are `BallSkin` resources (`resources/balls/`), so new
   balls are data, not code.
-- **Effects**: echo ripples are bold accent rings with black edges; the
+- **Effects**: echoes light up floor tiles; the
   shadow is a hard-edged blob; the finish line is chequered.
 - **Type**: Lilita One everywhere, white with a thick dark outline.
 

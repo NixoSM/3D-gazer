@@ -19,8 +19,6 @@ var fade := 0.0
 
 var _sky_material: ShaderMaterial
 var _time := 0.0
-## How far the floor has turned with the ground spin (radians).
-var _spin_offset := 0.0
 
 
 func _ready() -> void:
@@ -74,11 +72,6 @@ func _process(delta: float) -> void:
 
 	var speed := level.speed_at(s)
 	camera.update_view(delta, s, angle, height, level.tunnel_radius, speed, frozen or held)
-	# The floor pattern slides with the spin, so the push is visible.
-	if session.running and not held and not frozen:
-		_spin_offset += deg_to_rad(sim.spin_rate()) * delta
-		_spin_offset = wrapf(_spin_offset, -PI, PI)
-	tunnel.set_spin_offset(_spin_offset)
 	ball.update_view(delta, s, angle, height, level.tunnel_radius,
 		0.0 if held else sim.forward_speed, 0.0 if held else sim.lateral_speed)
 	tunnel.update_view(camera.global_position.z * -1.0, s, angle, height, _time)

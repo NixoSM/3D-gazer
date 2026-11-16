@@ -82,10 +82,12 @@ func decide(sim: BallSimulation) -> InputFrame:
 	# A PD controller on position over the holes, plus a lean that cancels
 	# the spin's pull (rolling resistance drags the ball towards the spin
 	# drift), like a player holding the phone tilted against it.
-	var full_tilt := tuning.rolling_factor * tuning.gravity * sin(tuning.max_tilt_radians())
+	var full_tilt := tuning.steering_acceleration
 	var pull := (sim.spin_speed() - sim.lateral_speed) * tuning.rolling_resistance
 	var authority := tuning.air_control if sim.phase == BallSimulation.Phase.AIRBORNE else 1.0
-	var steer := difference * 0.9 - sim.lateral_speed * 0.35 - pull / full_tilt / authority
+	# Gains in m/s² (per metre off, per m/s of drift), so the bot's
+	# reflexes stay those of a person, however quick the ball can be.
+	var steer := (difference * 11.6 - sim.lateral_speed * 4.5) / full_tilt - pull / full_tilt / authority
 	frame.tilt = _delay(clampf(steer, -1.0, 1.0))
 
 	# Echo: just before touchdown, tap if trouble starts right after the

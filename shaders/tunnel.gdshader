@@ -11,10 +11,10 @@
 // Everything else is computed from the fragment's tunnel coordinates (s
 // along the axis, angle around it):
 //   * colour        = palette sampled at s / level_length
-//   * floor pattern = one of a few flat looks (see `pattern`); it slides
-//                     sideways with the ground spin, like a conveyor
+//   * floor pattern = one of a few flat looks (see `pattern`), fixed to
+//                     the wall like the holes
 //   * contact shadow= a hard-edged blob under the ball
-//   * echo ripples  = bold outlined rings expanding over the curved surface
+//   * echo waves    = floor tiles lighting up as a wave spreads from the echo
 //   * best marker   = a dashed ring where your best attempt ended
 //   * finish line   = a chequered band
 shader_type spatial;
@@ -35,7 +35,6 @@ uniform float band_length = 3.0;       // metres per pattern repeat along the tu
 uniform float pattern_contrast = 0.14; // how much darker the dark parts of the pattern are
 uniform float shade_dark = 0.72;       // brightness of the "ceiling" half
 uniform float outline_width = 0.2;     // metres of black along every edge
-uniform float spin_offset = 0.0;       // radians the floor has slid with the spin
 
 // Ball (s, angle, height) and radius, for the contact shadow and shading.
 uniform vec3 ball = vec3(0.0);
@@ -67,7 +66,7 @@ float inside(float value, float threshold) {
 }
 
 // The floor's own look, before shading. `u` runs along the tunnel, `v`
-// around it (metres, sliding with the spin). Returns how dark (0..1).
+// around it (metres). Returns how dark (0..1).
 float floor_pattern(float u, float v, float distance_fade) {
 	float circumference = TAU * tunnel_radius;
 	if (pattern == 0) {
@@ -134,7 +133,7 @@ void fragment() {
 	// --- Flat colour and the floor pattern ---------------------------------------
 	// Patterns fade out in the distance, where they would shimmer.
 	float pattern_fade = 1.0 - smoothstep(28.0, 60.0, distance_to_camera);
-	float v = wrap_angle(angle - spin_offset) * tunnel_radius + PI * tunnel_radius;
+	float v = wrap_angle(angle) * tunnel_radius + PI * tunnel_radius;
 	vec3 color = wall * (1.0 - clamp(floor_pattern(s, v, pattern_fade), 0.0, 1.6) * pattern_contrast);
 
 	// --- Hard two-tone shading: the half of the tunnel above the ball is darker,
@@ -149,7 +148,16 @@ void fragment() {
 	float shadow_radius = ball_radius * mix(1.0, 0.55, clamp(h / 3.5, 0.0, 1.0));
 	color = mix(color, color * 0.55, inside(d_ball, shadow_radius));
 
-	// --- Echo ripples: a bold accent ring with black edges ---------------------
+	// --- Echo waves: whole floor tiles light up as the wave reaches their
+	// centre; lit tiles turn the accent colour and their seams turn black.
+	vec2 tile;
+	float echo_box = tile_box(s, v, band_length, tile);
+	float echo_seam = 1.0 - smoothstep(-0.02, 0.02, echo_box);
+	float tile_v = TAU * tunnel_radius / 10.0;
+	float tile_u = band_length * 1.3;
+	float centre_s = (tile.x + 0.5) * tile_u;
+	float centre_v = (tile.y + 0.5) * tile_v - mod(tile.x, 2.0) * tile_v * 0.5;
+	float centre_angle = (centre_v - PI * tunnel_radius) / tunnel_radius;
 	for (int i = 0; i < MAX_RIPPLES; i++) {
 		vec4 r = ripples[i];
 		if (r.w <= 0.0) continue;
@@ -157,10 +165,11 @@ void fragment() {
 		if (age < 0.0 || age > ripple_life) continue;
 		float life = 1.0 - age / ripple_life;
 		float front = age * ripple_speed;
-		float dist = abs(surface_distance(r.x, r.y, s, angle) - front);
-		float core = 0.09 + 0.16 * life * min(r.w, 1.5);
-		color = mix(color, outline_color, inside(dist, core + 0.07));
-		color = mix(color, accent, inside(dist, core));
+		float strength = min(r.w, 1.5);
+		float tile_distance = surface_distance(r.x, r.y, centre_s, centre_angle);
+		float wave = 1.0 - smoothstep(tile_u * 0.35, tile_u * 0.75, abs(tile_distance - front));
+		float lit = clamp(wave * (0.4 + 0.6 * life) * strength, 0.0, 1.0);
+		color = mix(color, mix(accent, outline_color, echo_seam), lit);
 	}
 
 	// --- Best run marker: dashed black/white ring --------------------------------
@@ -178,14 +187,10 @@ void fragment() {
 		color = mix(vec3(1.0), outline_color, check);
 	}
 
-	// --- Edges: a lighter lip, then the thick black outline -------------------------
+	// --- Edges: the thick black outline ---------------------------------------------
 	// Never thinner than ~2 pixels, so at grazing angles the floor still
 	// ends in a clean black line instead of breaking up.
 	float outline = max(outline_width, pixel * 2.0);
-	// A crisp, lighter lip just inside the outline, like the bevel on a
-	// cut-out cartoon platform (hard edged: no glow).
-	float lip = 1.0 - smoothstep(outline + 0.22 - pixel, outline + 0.22 + pixel, d);
-	color = mix(color, mix(color, vec3(1.0), 0.2), lip);
 	color = mix(color, outline_color, 1.0 - smoothstep(outline - pixel, outline + pixel, d));
 
 	// --- Distance fades into the void colour, along the tunnel ---------------------

@@ -79,10 +79,11 @@ there is floor. Hole parameters go to the shader in one float texture;
 each chunk gets the index range of the holes that can reach it as
 instance uniforms. The shell's thickness is drawn by a second tube at the
 shell's outer radius (`tunnel_shell.gdshader`): a pixel of it seen through
-a hole is a cut face when the view ray entered the shell inside a hole and
-left it where the shell is solid, otherwise void. Both shaders share the
+a hole is a cut face when the view ray, marched through the shell from
+where it crossed the inner surface (inside a hole) to the outer one, meets
+solid shell on the way; a short bisection finds where. Otherwise it is void. Both shaders share the
 field through `shaders/holes.gdshaderinc`. All chunks share one `ShaderMaterial`; per-frame inputs
-(ball position, ripples, fog colour, fade, spin offset) are uniforms.
+(ball position, ripples, fog colour, fade) are uniforms.
 
 The Mobile renderer is used on device. Every shader is unshaded with
 hand-written flat (cel) shading, so the look is the same on the Mobile and

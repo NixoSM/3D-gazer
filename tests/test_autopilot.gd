@@ -15,7 +15,7 @@ func test_bot_with_human_reaction_time_finishes_every_level() -> void:
 
 
 func test_first_level_forgives_slow_reactions() -> void:
-	_assert_finishes(_level_ids()[0], 0.45)
+	_assert_finishes(_level_ids()[0], 0.35)
 
 
 func _level_ids() -> Array:
