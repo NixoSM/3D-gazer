@@ -76,22 +76,24 @@ void fragment() {
 	float lo = t;
 	float hi = -1.0;
 	float k = t;
-	// Far away a face is a few pixels thin: a coarse look is enough there,
-	// and those grazing rays are the longest (and costliest) to trace.
+	// Far away a face is a few pixels thin: a coarser look is enough there.
 	float view_distance = length(world_pos - camera);
-	int steps = view_distance < 22.0 ? 12 : 4;
+	bool near = view_distance < 22.0;
+	int steps = near ? 8 : 4;
+	int sweep = near ? 8 : 5;
 	int refine = 10;  // stops early once within 1 cm (see below)
+	bool open_through = false;
 	for (int i = 0; i < steps; i++) {
-		// smooth_min() makes d up to BLEND/4 more negative than the true
-		// distance near blended holes, hence the margin; never crawl.
-		float step_m = max((-d - BLEND * 0.25) * 0.8, 0.06);
 		// The hole is wider than what is left of the ray: open all the way,
 		// no need to look (most pixels over open void end here).
+		// smooth_min() makes d up to BLEND/4 more negative than the true
+		// distance near blended holes, hence the margin.
 		if (-d - BLEND * 0.25 > (1.0 - k) / (1.0 - t) * span) {
+			open_through = true;
 			break;
 		}
-		// Out of steps: the last look is always the far end of the shell.
-		k = i == steps - 1 ? 1.0 : min(k + step_m / span * (1.0 - t), 1.0);
+		float step_m = max((-d - BLEND * 0.25) * 0.8, 0.06);
+		k = min(k + step_m / span * (1.0 - t), 1.0);
 		vec3 p = camera + ray * k;
 		d = floor_distance(-p.z, atan(p.x, -p.y));
 		if (d >= 0.0) {
@@ -101,6 +103,23 @@ void fragment() {
 		lo = k;
 		if (k >= 1.0) {
 			break;
+		}
+	}
+	// Out of long steps with ray left (it runs close along an edge): sweep
+	// the rest evenly. Never jump to the far end instead: a grazing ray
+	// travels metres inside the shell, so its far end can lie in the *next*
+	// hole, beyond the platform whose face it hit, and the face would turn
+	// see-through.
+	if (hi < 0.0 && !open_through && k < 1.0) {
+		float from = k;
+		for (int i = 1; i <= sweep; i++) {
+			k = mix(from, 1.0, float(i) / float(sweep));
+			vec3 p = camera + ray * k;
+			if (floor_distance(-p.z, atan(p.x, -p.y)) >= 0.0) {
+				hi = k;
+				break;
+			}
+			lo = k;
 		}
 	}
 	if (hi < 0.0) {
