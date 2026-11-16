@@ -13,10 +13,6 @@ extends Node3D
 @onready var camera: CameraRig = $Camera
 @onready var environment_node: WorldEnvironment = $WorldEnvironment
 
-## Where the travelling lamp sits relative to the ball (metres ahead, metres above the wall).
-const LAMP_AHEAD := 1.2
-const LAMP_HEIGHT := 2.4
-
 var palette: LevelPalette
 ## 0 = clear, 1 = fully faded to the void colour.
 var fade := 0.0
@@ -38,10 +34,7 @@ func _ready() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
-	env.glow_enabled = true
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.0
-	env.glow_hdr_threshold = 0.9
+	env.glow_enabled = false
 	environment_node.environment = env
 
 
@@ -79,20 +72,10 @@ func _process(delta: float) -> void:
 	ball.update_view(delta, s, angle, height, level.tunnel_radius, sim.forward_speed, sim.lateral_speed)
 	tunnel.update_view(camera.global_position.z * -1.0, s, angle, height, _time)
 
-	# The lamp hangs just above and ahead of the ball, so the floor around it
-	# is lit and the rest of the tunnel falls into darkness.
-	var lamp := TunnelMath.point(s + LAMP_AHEAD, angle, level.tunnel_radius - LAMP_HEIGHT - maxf(height, 0.0) * 0.5)
-	var accent := palette.accent_at(progress)
 	var void_color := palette.void_at(progress)
-	var lamp_color := Color.WHITE.lerp(accent, 0.22)
-	var glow := palette.void_at(progress + 40.0 / level.length).lerp(Color.WHITE, 0.35)
-	var fog := void_color.darkened(0.8)
-	tunnel.set_lighting(lamp, lamp_color, fog)
-	tunnel.set_fade(fade, fog)
+	tunnel.set_fog(void_color)
+	tunnel.set_fade(fade, void_color)
 	_sky_material.set_shader_parameter("void_color", void_color)
-	_sky_material.set_shader_parameter("glow_color", glow)
-	_sky_material.set_shader_parameter("mote_color", accent)
 	_sky_material.set_shader_parameter("fade", fade)
-	_sky_material.set_shader_parameter("fade_color", fog)
-	var floor_color := palette.wall_at(progress) * lamp_color * 1.6
-	ball.set_lighting(lamp, lamp_color, TunnelMath.inward(angle), glow, floor_color, fade, fog)
+	_sky_material.set_shader_parameter("fade_color", void_color)
+	ball.set_fade(fade, void_color)

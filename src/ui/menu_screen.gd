@@ -22,9 +22,8 @@ func _ready() -> void:
 	var top_gap := Control.new()
 	top_gap.custom_minimum_size = Vector2(0, 40)
 	layout.add_child(top_gap)
-	layout.add_child(UiStyle.display("GAZER", 120, 34))
-	var subtitle := UiStyle.caption("a tunnel that turns around you", 20)
-	subtitle.modulate.a = 0.8
+	layout.add_child(UiStyle.display("GAZER", 150, 6))
+	var subtitle := UiStyle.caption("a tunnel that turns around you", 24)
 	layout.add_child(subtitle)
 
 	var title_gap := Control.new()
@@ -41,8 +40,7 @@ func _ready() -> void:
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.add_child(gap)
 	for line in ["tilt to roll", "swipe up to jump", "tap as you land to echo"]:
-		var hint := UiStyle.caption(line, 18)
-		hint.modulate.a = 0.7
+		var hint := UiStyle.caption(line, 24)
 		layout.add_child(hint)
 
 
@@ -67,13 +65,13 @@ func _row(index: int, info: Dictionary) -> Control:
 
 	var swatch := TextureRect.new()
 	var texture := GradientTexture2D.new()
-	texture.gradient = (info["palette"] as LevelPalette).void_color
+	texture.gradient = (info["palette"] as LevelPalette).wall
 	texture.width = 256
 	texture.height = 4
 	swatch.texture = texture
 	swatch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	swatch.stretch_mode = TextureRect.STRETCH_SCALE
-	swatch.custom_minimum_size = Vector2(340, 6)
+	swatch.custom_minimum_size = Vector2(340, 12)
 	swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(swatch)
@@ -87,19 +85,20 @@ func _row(index: int, info: Dictionary) -> Control:
 		status = "best %d%%" % int(info["best"] * 100.0)
 	else:
 		status = "%02d · new" % (index + 1)
-	var caption := UiStyle.caption(status, 18)
-	caption.modulate.a = 0.75 if info["unlocked"] else 0.4
+	var caption := UiStyle.caption(status, 24)
 	row.add_child(caption)
 	if not info["unlocked"]:
-		row.modulate.a = 0.5
+		# Solid grey, not transparency: see-through outlined text turns to mud.
+		caption.add_theme_color_override("font_color", UiStyle.LOCKED)
+		swatch.modulate = Color(0.6, 0.6, 0.6)
 	return row
 
 
 static func _scrim() -> TextureRect:
 	# A soft vertical darkening so text reads over any tunnel colour.
 	var gradient := Gradient.new()
-	gradient.set_color(0, Color(0, 0, 0, 0.45))
-	gradient.set_color(1, Color(0, 0, 0, 0.55))
+	gradient.set_color(0, Color(0, 0, 0, 0.2))
+	gradient.set_color(1, Color(0, 0, 0, 0.3))
 	gradient.add_point(0.45, Color(0, 0, 0, 0.0))
 	var texture := GradientTexture2D.new()
 	texture.gradient = gradient

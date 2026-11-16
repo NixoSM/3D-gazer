@@ -39,7 +39,6 @@ func set_level(p_level: LevelData, p_palette: LevelPalette, tuning: BallTuning) 
 	material.set_shader_parameter("accent_gradient", palette.accent_texture)
 	material.set_shader_parameter("level_length", level.length)
 	material.set_shader_parameter("tunnel_radius", level.tunnel_radius)
-	material.set_shader_parameter("rim_thickness", TunnelMeshBuilder.WALL_THICKNESS)
 	material.set_shader_parameter("ball_radius", tuning.ball_radius)
 
 
@@ -71,10 +70,8 @@ func set_best_marker(s: float) -> void:
 	material.set_shader_parameter("best_s", s)
 
 
-func set_lighting(lamp_position: Vector3, lamp_color: Color, fog_color: Color) -> void:
-	material.set_shader_parameter("lamp_position", lamp_position)
-	material.set_shader_parameter("lamp_color", lamp_color)
-	material.set_shader_parameter("fog_color", fog_color)
+func set_fog(color: Color) -> void:
+	material.set_shader_parameter("fog_color", color)
 
 
 func set_fade(amount: float, color: Color) -> void:

@@ -8,12 +8,19 @@ extends RefCounted
 ##
 ## Wherever a solid cell touches an open one we add a "rim" face that goes
 ## outwards through the wall's thickness, so holes read as cuts in a thick
-## shell rather than as flat decals. Rim faces are tagged with
-## COLOR.r = 1 so the shader can paint them with the accent colour.
+## shell rather than as flat decals, and a flat strip on the wall along the
+## same edge: together they draw the thick cartoon outline around each hole.
+## Rim faces are tagged COLOR.r = 1 and outline strips COLOR.g = 1.
 
 const ANGULAR_SEGMENTS := 72
 const ROW_LENGTH := 3.0
 const WALL_THICKNESS := 0.45
+## Width (m) of the black outline drawn on the wall around every hole.
+const OUTLINE_WIDTH := 0.16
+## Outlines float this far off the wall, towards the axis, to avoid z-fighting.
+const OUTLINE_LIFT := 0.01
+
+enum Kind { WALL, RIM, OUTLINE }
 const EPSILON := 0.0005
 
 
@@ -47,14 +54,21 @@ static func build_chunk(level: LevelData, s0: float, s1: float) -> ArrayMesh:
 			var right := solid[i][(j + 1) % columns]
 			var back := solid[i - 1][j] if i > 0 else before[j]
 			var front := solid[i + 1][j] if i < rows.size() - 2 else after[j]
+			# Plus a thick outline strip lying on the wall along that edge.
+			var outline_angle := minf(OUTLINE_WIDTH / radius, a1 - a0)
+			var outline_s := minf(OUTLINE_WIDTH, sb - sa)
 			if left == 0:
 				_side_rim(tool, radius, sa, sb, a0)
+				_outline(tool, radius, sa, sb, a0, a0 + outline_angle)
 			if right == 0:
 				_side_rim(tool, radius, sa, sb, a1)
+				_outline(tool, radius, sa, sb, a1 - outline_angle, a1)
 			if back == 0:
 				_end_rim(tool, radius, sa, a0, a1)
+				_outline(tool, radius, sa, sa + outline_s, a0, a1)
 			if front == 0:
 				_end_rim(tool, radius, sb, a0, a1)
+				_outline(tool, radius, sb - outline_s, sb, a0, a1)
 
 	tool.index()
 	return tool.commit()
@@ -104,19 +118,20 @@ static func _solid_row(level: LevelData, s: float, angles: PackedFloat32Array) -
 	return row
 
 
-static func _vertex(tool: SurfaceTool, position: Vector3, normal: Vector3, rim: bool) -> void:
-	tool.set_color(Color(1.0 if rim else 0.0, 0.0, 0.0))
+## COLOR.r marks rim faces and COLOR.g outline strips, for the shader.
+static func _vertex(tool: SurfaceTool, position: Vector3, normal: Vector3, kind: Kind) -> void:
+	tool.set_color(Color(1.0 if kind == Kind.RIM else 0.0, 1.0 if kind == Kind.OUTLINE else 0.0, 0.0))
 	tool.set_normal(normal)
 	tool.add_vertex(position)
 
 
-static func _quad(tool: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, normal: Vector3, rim: bool) -> void:
-	_vertex(tool, a, normal, rim)
-	_vertex(tool, b, normal, rim)
-	_vertex(tool, c, normal, rim)
-	_vertex(tool, a, normal, rim)
-	_vertex(tool, c, normal, rim)
-	_vertex(tool, d, normal, rim)
+static func _quad(tool: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, normal: Vector3, kind: Kind) -> void:
+	_vertex(tool, a, normal, kind)
+	_vertex(tool, b, normal, kind)
+	_vertex(tool, c, normal, kind)
+	_vertex(tool, a, normal, kind)
+	_vertex(tool, c, normal, kind)
+	_vertex(tool, d, normal, kind)
 
 
 ## Inner surface of the wall, facing the axis.
@@ -125,7 +140,7 @@ static func _wall_quad(tool: SurfaceTool, r: float, sa: float, sb: float, a0: fl
 	_quad(tool,
 		TunnelMath.point(sa, a0, r), TunnelMath.point(sb, a0, r),
 		TunnelMath.point(sb, a1, r), TunnelMath.point(sa, a1, r),
-		normal, false)
+		normal, Kind.WALL)
 
 
 ## Rim along the tunnel (a hole edge at constant angle).
@@ -134,7 +149,7 @@ static func _side_rim(tool: SurfaceTool, r: float, sa: float, sb: float, angle: 
 	_quad(tool,
 		TunnelMath.point(sa, angle, r), TunnelMath.point(sa, angle, outer),
 		TunnelMath.point(sb, angle, outer), TunnelMath.point(sb, angle, r),
-		TunnelMath.tangent(angle), true)
+		TunnelMath.tangent(angle), Kind.RIM)
 
 
 ## Rim across the tunnel (a hole edge at constant s).
@@ -143,4 +158,13 @@ static func _end_rim(tool: SurfaceTool, r: float, s: float, a0: float, a1: float
 	_quad(tool,
 		TunnelMath.point(s, a0, r), TunnelMath.point(s, a0, outer),
 		TunnelMath.point(s, a1, outer), TunnelMath.point(s, a1, r),
-		Vector3(0.0, 0.0, 1.0), true)
+		Vector3(0.0, 0.0, 1.0), Kind.RIM)
+
+
+## Outline strip on the wall surface, slightly lifted towards the axis.
+static func _outline(tool: SurfaceTool, r: float, sa: float, sb: float, a0: float, a1: float) -> void:
+	var lifted := r - OUTLINE_LIFT
+	_quad(tool,
+		TunnelMath.point(sa, a0, lifted), TunnelMath.point(sb, a0, lifted),
+		TunnelMath.point(sb, a1, lifted), TunnelMath.point(sa, a1, lifted),
+		TunnelMath.inward((a0 + a1) * 0.5), Kind.OUTLINE)

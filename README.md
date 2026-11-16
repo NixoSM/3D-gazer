@@ -2,19 +2,21 @@
 
 *A tunnel that turns around you.*
 
-You are a polished dark ball rolling down a dark tunnel, lit only by a lamp that travels with you. Tilt the phone and the
+You are a striped cartoon ball rolling down a bright, flat-coloured tunnel. Tilt the phone and the
 ball rolls across the wall as if you had tilted the floor; the camera turns
 with it, so wherever the ball is on the circumference, *down* is always
 under it and it is the world that rotates. Swipe up to jump (a bigger
 swipe means a higher jump). Tap the moment you land and the ball **echoes**
-the same jump, sending a thin line of light across the wall that wraps all
-the way around the tunnel and meets itself on the far side. Chain echoes and the
+the same jump, sending a bold ring across the wall that wraps all the way
+around the tunnel and meets itself on the far side. Chain echoes and the
 notes climb a scale.
 
 Each level is about a minute long. The ball speeds up by 20% from start to
-finish. The colour glowing through the holes and at the far end moves
-through a palette (night into sunrise, shallows to deep sea, kiln-hot to
-ash), so it tells you how far you are and shows what is coming.
+finish, and the tunnel's colour moves through a palette (sunrise yellows to
+violet, sea greens to deep blue, lava yellow to red), so the colour around
+you tells you how far you are and the colour ahead shows what is coming.
+The look is a deliberate throwback to Flash games: flat colours, hard
+shading, thick black outlines.
 
 ![Screenshots](docs/media/screens.jpg)
 
@@ -116,6 +118,6 @@ keeping the screen awake) are handled in project settings and in
 
 ## Licences
 
-Code: choose a licence before publishing (none is set yet). Fonts: Geist and
-Geist Mono, SIL Open Font License 1.1 (see `assets/fonts/`).
+Code: choose a licence before publishing (none is set yet). Font: Lilita One,
+SIL Open Font License 1.1 (see `assets/fonts/`).
 All sounds are synthesised in code; there are no third-party audio assets.

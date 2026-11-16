@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://rbkkfru86bm6"
-path="res://.godot/imported/Geist-ExtraLight.woff2-38b0529c1bbab34a1f80b2aeafebbf7d.fontdata"
+uid="uid://k16dfxjidj8d"
+path="res://.godot/imported/LilitaOne-Regular.woff2-6685eceecf6928cf4edc0a3e7e608271.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Geist-ExtraLight.woff2"
-dest_files=["res://.godot/imported/Geist-ExtraLight.woff2-38b0529c1bbab34a1f80b2aeafebbf7d.fontdata"]
+source_file="res://assets/fonts/LilitaOne-Regular.woff2"
+dest_files=["res://.godot/imported/LilitaOne-Regular.woff2-6685eceecf6928cf4edc0a3e7e608271.fontdata"]
 
 [params]
 

@@ -38,53 +38,54 @@ static func _stop(at: float, wall: String, void_color: String, accent: String) -
 func _specs() -> Array[LevelGenerator.Spec]:
 	var specs: Array[LevelGenerator.Spec] = []
 
-	# Palettes: `wall` tints the dark shell (keep it dark and desaturated),
-	# `void` is the colour seen through holes and carries the level's mood,
-	# `accent` lights hole lips, ripples and the lamp.
+	# Palettes: `wall` is the tunnel's flat colour and carries the progress,
+	# `void` is the background seen through holes (keep it in strong contrast
+	# with the wall), `accent` colours echo rings and the best-run marker.
+	# Speeds are the original 10.5 / 11.5 / 12.5 m/s, all +30%.
 
-	# 1. Night into sunrise: the gentle one.
+	# 1. Sunrise: the gentle one.
 	var dawn := LevelGenerator.Spec.new()
 	dawn.id = "01_dawn"
 	dawn.display_name = "Dawn"
 	dawn.seed = 1107
-	dawn.base_speed = 13.65  # 10.5 m/s + 30%
+	dawn.base_speed = 13.65
 	dawn.difficulty = 0.35
 	dawn.pattern_weights = {"gate": 4.0, "ring": 2.0, "echo_run": 1.2, "bridge": 0.6}
 	dawn.palette = [
-		_stop(0.00, "#383b47", "#141a3d", "#9fb0ff"),
-		_stop(0.35, "#3d3747", "#2a1746", "#c8a6ff"),
-		_stop(0.70, "#463a3c", "#5a1f2c", "#ff9a85"),
-		_stop(1.00, "#4a4038", "#8a4a1c", "#ffc58a"),
+		_stop(0.00, "#ffc93c", "#3a1c80", "#ffffff"),
+		_stop(0.35, "#ff8f3c", "#33166e", "#fff36b"),
+		_stop(0.70, "#ff4f7b", "#26105a", "#fff36b"),
+		_stop(1.00, "#c94bff", "#150a3c", "#7dfcff"),
 	]
 	specs.append(dawn)
 
-	# 2. Down through the sea: rhythm and bridges.
+	# 2. Into the sea: rhythm and bridges.
 	var tide := LevelGenerator.Spec.new()
 	tide.id = "02_tide"
 	tide.display_name = "Tide"
 	tide.seed = 2214
-	tide.base_speed = 11.5
+	tide.base_speed = 14.95
 	tide.difficulty = 0.6
 	tide.palette = [
-		_stop(0.00, "#34403f", "#0b3a3d", "#7ff0e0"),
-		_stop(0.30, "#333e44", "#0b2c45", "#7fd0ff"),
-		_stop(0.65, "#30364a", "#101d4a", "#8fa0ff"),
-		_stop(1.00, "#2b2d3a", "#05081c", "#c9d2ff"),
+		_stop(0.00, "#5cf2b0", "#0c2a72", "#ffffff"),
+		_stop(0.30, "#2fd6ff", "#0b2266", "#fff36b"),
+		_stop(0.65, "#3d7bff", "#1a0d4f", "#fff36b"),
+		_stop(1.00, "#8a5cff", "#0a0630", "#7dfcff"),
 	]
 	specs.append(tide)
 
-	# 3. Through the kiln and out into ash: fast and tight.
+	# 3. Lava: fast and tight.
 	var ember := LevelGenerator.Spec.new()
 	ember.id = "03_ember"
 	ember.display_name = "Ember"
 	ember.seed = 3391
-	ember.base_speed = 12.5
+	ember.base_speed = 16.25
 	ember.difficulty = 0.85
 	ember.palette = [
-		_stop(0.00, "#3b3634", "#3a0f08", "#ff8a4c"),
-		_stop(0.35, "#41363a", "#5c1209", "#ff6a3d"),
-		_stop(0.70, "#423a33", "#6e3305", "#ffb54a"),
-		_stop(1.00, "#45423c", "#1a1714", "#f2e9da"),
+		_stop(0.00, "#ffe14a", "#5a0e2a", "#ffffff"),
+		_stop(0.35, "#ffa62b", "#4a0b22", "#ffffff"),
+		_stop(0.70, "#ff5a2b", "#1f0a3a", "#fff36b"),
+		_stop(1.00, "#ff2e4d", "#120624", "#ffe14a"),
 	]
 	specs.append(ember)
 	return specs

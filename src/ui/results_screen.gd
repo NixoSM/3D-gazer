@@ -27,7 +27,7 @@ func _ready() -> void:
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 40)
 	layout.add_child(gap)
-	_stats = UiStyle.caption("", 20)
+	_stats = UiStyle.caption("", 24)
 	_stats.modulate.a = 0.85
 	layout.add_child(_stats)
 	var gap2 := Control.new()

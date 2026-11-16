@@ -5,13 +5,16 @@ extends Node3D
 ##
 ## This node's basis is the ball's local frame (X right, Y up from the wall,
 ## Z backwards). Its scale carries the squash; the child mesh carries spin.
+## A second, slightly larger sphere drawn inside-out gives the black outline.
 
 ## The default look. Swap at runtime with apply_skin().
-@export var skin: BallSkin = preload("res://resources/balls/graphite.tres")
+@export var skin: BallSkin = preload("res://resources/balls/classic.tres")
 
 @onready var _mesh: MeshInstance3D = $Mesh
 
 var material: ShaderMaterial
+var outline_material: ShaderMaterial
+var _outline := MeshInstance3D.new()
 var _radius := 0.42
 var _spin := Basis.IDENTITY
 var _squash := 1.0
@@ -23,18 +26,25 @@ func _ready() -> void:
 	material = ShaderMaterial.new()
 	material.shader = preload("res://shaders/ball.gdshader")
 	_mesh.material_override = material
+	outline_material = ShaderMaterial.new()
+	outline_material.shader = preload("res://shaders/outline.gdshader")
+	_outline.name = "Outline"
+	_outline.material_override = outline_material
+	_outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_outline)
 	apply_skin(skin)
 
 
 func apply_skin(new_skin: BallSkin) -> void:
 	skin = new_skin
-	material.set_shader_parameter("base_color", skin.base_color)
-	material.set_shader_parameter("seam_color", skin.seam_color)
-	material.set_shader_parameter("seam_width", skin.seam_width)
-	material.set_shader_parameter("glossiness", skin.glossiness)
-	material.set_shader_parameter("specular", skin.specular)
-	material.set_shader_parameter("reflectivity", skin.reflectivity)
-	material.set_shader_parameter("reflection_tint", skin.reflection_tint)
+	material.set_shader_parameter("body_color", skin.body_color)
+	material.set_shader_parameter("stripe_color", skin.stripe_color)
+	material.set_shader_parameter("stripe_width", skin.stripe_width)
+	material.set_shader_parameter("line_color", skin.line_color)
+	material.set_shader_parameter("shade_amount", skin.shade_amount)
+	material.set_shader_parameter("shine_size", skin.shine_size)
+	outline_material.set_shader_parameter("outline_color", skin.line_color)
+	set_radius(_radius)
 
 
 func set_radius(radius: float) -> void:
@@ -45,6 +55,12 @@ func set_radius(radius: float) -> void:
 	sphere.radial_segments = 64
 	sphere.rings = 32
 	_mesh.mesh = sphere
+	var hull := SphereMesh.new()
+	hull.radius = radius * (1.0 + skin.outline_width)
+	hull.height = hull.radius * 2.0
+	hull.radial_segments = 48
+	hull.rings = 24
+	_outline.mesh = hull
 
 
 func reset_spin() -> void:
@@ -92,13 +108,8 @@ func flash(amount: float, color: Color) -> void:
 	material.set_shader_parameter("flash_color", color)
 
 
-## Scene lighting the ball responds to, all in world space.
-func set_lighting(lamp_position: Vector3, lamp_color: Color, up: Vector3, glow: Color, floor_color: Color,
-		fade_amount: float, fade_color: Color) -> void:
-	material.set_shader_parameter("lamp_position", lamp_position)
-	material.set_shader_parameter("lamp_color", lamp_color)
-	material.set_shader_parameter("up_direction", up)
-	material.set_shader_parameter("glow_color", glow)
-	material.set_shader_parameter("floor_color", floor_color)
-	material.set_shader_parameter("fade", fade_amount)
-	material.set_shader_parameter("fade_color", fade_color)
+func set_fade(amount: float, color: Color) -> void:
+	material.set_shader_parameter("fade", amount)
+	material.set_shader_parameter("fade_color", color)
+	outline_material.set_shader_parameter("fade", amount)
+	outline_material.set_shader_parameter("fade_color", color)

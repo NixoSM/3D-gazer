@@ -44,7 +44,7 @@ toast. A thin dashed ring on the wall marks your best distance.
 Forward speed grows linearly with progress: `v = base · (1 + 0.2 · s/L)`.
 Because speed depends on position, the run time is
 `T = L / (0.2 · base) · ln(1.2)`, and levels are sized so that `T = 60 s`
-(see `SpeedProfile`). Base speeds: Dawn 13.65 m/s, Tide 11.5, Ember 12.5. Camera FOV widens by 9° over the level to sell the
+(see `SpeedProfile`). Base speeds: Dawn 13.65 m/s, Tide 14.95, Ember 16.25. Camera FOV widens by 9° over the level to sell the
 extra speed.
 
 ## Level patterns
@@ -72,8 +72,8 @@ every level to the end with `Autopilot`.
 All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
 
 - Normal landing: a soft ripple, the ball squashes, a low thud, a light haptic.
-- Echo: a thin line of light that expands *over the cylinder*, with a soft
-  afterglow, wrapping around the tunnel to meet itself on the far side. The ball flashes in the accent colour, the FOV kicks, a
+- Echo: a bold ring that expands *over the cylinder*, wrapping around the
+  tunnel to meet itself on the far side. The ball flashes in the accent colour, the FOV kicks, a
   glassy note plays (D-major pentatonic, one step higher per echo in the
   chain) and a medium haptic fires. A perfect echo adds a bell overtone, a
   brighter wave and a heavy haptic. The HUD shows `×N` from the second echo.
@@ -83,29 +83,26 @@ All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
 
 ## Visual language
 
-Dark, restrained and precise: few colours, fine detail, nothing busy. The
-quality should come from light and material, not from decoration.
+Old Flash-game cartoon: flat, bright, high-contrast colour, hard shading and
+thick black outlines. No textures, no realistic lighting, no glow.
 
-- **Light**: the only light is a lamp that travels just above and ahead of
-  the ball. The floor around the ball is lit; the rest of the tunnel falls
-  away into darkness. This keeps the eye on the ball and makes the tube's
-  rotation readable without any grid.
-- **Tunnel**: a dark shell with a brushed grain running along the direction
-  of travel (it streaks with speed), a satin sheen, and a machined seam every
-  4.5 m with a hairline highlight. Its tint shifts subtly with progress.
-- **Holes**: cut through a 0.45 m shell. The cut shows a thin bright lip in
-  the accent colour, then the dark body of the shell, then the void.
-- **Void**: the level's colour lives here, seen through every hole. It
-  glows towards the far end, where the darkness narrows to a single point
-  of light: the thing the player is always gazing at. Its colour is what
-  moves most visibly with progress.
-- **Ball** (default skin "Graphite"): polished dark metal with two hairline
-  seams at right angles so rolling reads in every direction. It mirrors the
-  glow ahead and the lit floor beneath it, plus a tight glint and a broad
-  satin sheen from the lamp. Looks are `BallSkin` resources
-  (`resources/balls/`), so new balls are data, not code.
-- **Type**: Geist ExtraLight for names and numbers, Geist Mono in spaced
-  capitals for labels. No panels or bordered buttons.
+- **Tunnel**: one flat colour at a time, taken from the level palette by
+  progress, in alternating light/dark rings that sell the speed, with a few
+  thin lane lines that make rotation readable. The half of the tunnel
+  opposite the ball is a flat darker tone (cel shading), which keeps "down"
+  obvious as the world turns. Distance fades into the void colour in three
+  hard steps.
+- **Holes**: show a flat, strongly contrasting void colour with a few
+  blinking cartoon stars. Each hole has a thick black outline (a strip on
+  the wall plus the black cut face of the 0.45 m shell).
+- **Ball** (default skin "Classic"): a white ball with a wide coloured
+  stripe, like a striped pool ball, so rolling reads in every direction,
+  with one hard shadow step, a solid white shine spot and a thick black
+  outline. Looks are `BallSkin` resources (`resources/balls/`), so new
+  balls are data, not code.
+- **Effects**: echo ripples are bold accent rings with black edges; the
+  shadow is a hard-edged blob; the finish line is chequered.
+- **Type**: Lilita One everywhere, white with a thick dark outline.
 
 ## Ideas not built yet
 

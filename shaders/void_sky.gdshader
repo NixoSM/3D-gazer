@@ -1,11 +1,9 @@
-// What lies outside the tunnel, seen through every hole: the level's colour,
-// deepest at the sides and glowing straight ahead, where the tunnel's
-// darkness narrows to a point of light. A few slow motes give holes depth.
+// What lies outside the tunnel, seen through every hole and at the far end:
+// a flat, saturated colour with a few cartoon stars.
 shader_type sky;
 
-uniform vec3 void_color : source_color = vec3(0.05, 0.06, 0.12);
-uniform vec3 glow_color : source_color = vec3(0.6, 0.7, 1.0);
-uniform vec3 mote_color : source_color = vec3(1.0);
+uniform vec3 void_color : source_color = vec3(0.1, 0.05, 0.3);
+uniform vec3 star_color : source_color = vec3(1.0);
 uniform float fade = 0.0;
 uniform vec3 fade_color : source_color = vec3(0.0);
 
@@ -17,18 +15,18 @@ float hash13(vec3 p) {
 
 void sky() {
 	vec3 dir = normalize(EYEDIR);
-	float ahead = max(dot(dir, vec3(0.0, 0.0, -1.0)), 0.0);
-	vec3 color = mix(void_color, glow_color, pow(ahead, 3.0) * 0.55);
-	color += glow_color * pow(ahead, 120.0) * 1.5;
+	vec3 color = void_color;
 
-	vec3 grid = dir * 46.0;
+	// Sparse plus-shaped stars that blink on and off (no soft glow).
+	vec3 grid = dir * 30.0;
 	vec3 cell = floor(grid);
 	float pick = hash13(cell);
-	if (pick > 0.975) {
-		vec3 center = cell + 0.5 + (vec3(hash13(cell + 1.0), hash13(cell + 2.0), hash13(cell + 3.0)) - 0.5) * 0.6;
-		float d = length(grid - center);
-		float twinkle = 0.5 + 0.5 * sin(TIME * (0.5 + pick * 1.5) + pick * 40.0);
-		color += mote_color * smoothstep(0.12, 0.0, d) * twinkle * 0.6;
+	if (pick > 0.97) {
+		vec3 local = grid - cell - 0.5;
+		vec3 a = abs(local);
+		float size = 0.05 + 0.12 * step(0.5, fract(TIME * (0.3 + pick) + pick * 7.0));
+		float plus = step(min(min(a.x + a.y, a.y + a.z), a.x + a.z), 0.06) * step(max(max(a.x, a.y), a.z), size + 0.04);
+		color = mix(color, star_color, plus);
 	}
 	COLOR = mix(color, fade_color, fade);
 }

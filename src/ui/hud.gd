@@ -33,7 +33,7 @@ func _ready() -> void:
 	pause.pressed.connect(pause_pressed.emit)
 	top.add_child(pause)
 
-	_toast = UiStyle.caption("", 22)
+	_toast = UiStyle.caption("", 26)
 	_toast.modulate.a = 0.0
 	layout.add_child(_toast)
 
@@ -44,7 +44,7 @@ func _ready() -> void:
 	_chain = UiStyle.display("", 132)
 	_chain.modulate.a = 0.0
 	layout.add_child(_chain)
-	_perfect = UiStyle.caption("perfect", 22)
+	_perfect = UiStyle.caption("perfect", 26)
 	_perfect.modulate.a = 0.0
 	layout.add_child(_perfect)
 

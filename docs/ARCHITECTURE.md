@@ -70,7 +70,7 @@ faces wherever wall meets hole. All chunks share one `ShaderMaterial`;
 per-frame inputs (ball position, ripples, fog colour, fade) are uniforms.
 
 The Mobile renderer is used on device. Every shader is unshaded with
-hand-written lighting, so the look is the same on the Mobile and
+hand-written flat (cel) shading, so the look is the same on the Mobile and
 Compatibility renderers (screenshots are rendered with Compatibility under
 a software GPU).
 
@@ -82,7 +82,7 @@ a software GPU).
 | Add a level | A JSON file in `levels/` and its id in `levels/manifest.json` (see LEVEL_FORMAT.md) |
 | Add a hole pattern | `tools/level_generator.gd`, then re-run `tools/generate_levels.gd` |
 | Add a new obstacle type | `LevelData` + serializer (bump `format_version`), `BallSimulation`, the mesh builder or a new view, the validator, tests |
-| Add a ball look | Duplicate `resources/balls/graphite.tres`, edit it, apply with `BallView.apply_skin()` |
+| Add a ball look | Duplicate `resources/balls/classic.tres`, edit it, apply with `BallView.apply_skin()` |
 | Change sounds | `ToneSynth` (keep the `play_*` API) |
 | Change haptics | `PlatformServices.HAPTIC_PATTERNS` |
 | Add a screen | `src/ui/`, wire it in `Main` |

@@ -9,27 +9,27 @@
   "palette": [
     {
       "at": 0.0,
-      "wall": "#383b47",
-      "void": "#141a3d",
-      "accent": "#9fb0ff"
+      "wall": "#ffc93c",
+      "void": "#3a1c80",
+      "accent": "#ffffff"
     },
     {
       "at": 0.35,
-      "wall": "#3d3747",
-      "void": "#2a1746",
-      "accent": "#c8a6ff"
+      "wall": "#ff8f3c",
+      "void": "#33166e",
+      "accent": "#fff36b"
     },
     {
       "at": 0.7,
-      "wall": "#463a3c",
-      "void": "#5a1f2c",
-      "accent": "#ff9a85"
+      "wall": "#ff4f7b",
+      "void": "#26105a",
+      "accent": "#fff36b"
     },
     {
       "at": 1.0,
-      "wall": "#4a4038",
-      "void": "#8a4a1c",
-      "accent": "#ffc58a"
+      "wall": "#c94bff",
+      "void": "#150a3c",
+      "accent": "#7dfcff"
     }
   ],
   "holes": [
