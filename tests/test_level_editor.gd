@@ -122,3 +122,43 @@ func test_pattern_stamp_cuts_holes_inside_the_level() -> void:
 	assert_true(added.size() >= 3, "three gates")
 	for hole in added:
 		assert_true(hole.s_start >= 200.0 and hole.s_end() <= level.length)
+
+
+## Drives the Spin fields the way a person does (through their signals), on a
+## level with no spin and on one with a generator spin that starts at 0 °/s:
+## picking a direction must stick, and every field must reach the level.
+func test_spin_fields_take_effect_through_the_ui() -> void:
+	for spin in [[], [SpinKey.new(0.0, 0.0), SpinKey.new(80.0, 25.0), SpinKey.new(160.0, -30.0)]]:
+		var level := _short_level()
+		level.spin.assign(spin)
+		var document := LevelDocument.new()
+		document.replace(level, "")
+		var strip := StripView.new()
+		var analysis := LevelAnalysis.new(make_tuning())
+		var inspector := InspectorPanel.new()
+		inspector.setup(document, strip, analysis)
+		var direction: OptionButton = inspector._spin_direction
+		direction.select(1)
+		direction.item_selected.emit(1)
+		assert_eq(direction.selected, 1, "Left stays selected")
+		assert_true(document.level.spin_at(0.0) < -1.0, "choosing Left alone spins left")
+		_type(inspector._spin_rate, 45.0)
+		_type(inspector._spin_ramp, 100.0)
+		assert_near(document.level.spin_at(0.0), -45.0, 0.01)
+		assert_near(document.level.spin_at(document.level.length), -90.0, 0.01)
+		direction.select(2)
+		direction.item_selected.emit(2)
+		assert_near(document.level.spin_at(0.0), 45.0, 0.01, "Right keeps the speed")
+		direction.select(0)
+		direction.item_selected.emit(0)
+		assert_true(document.level.spin.is_empty(), "None removes the spin")
+		inspector.free()
+		strip.free()
+		analysis.shutdown()
+
+
+## Types a number into a field. (Outside the scene tree, as here, setting
+## .value does not emit value_changed, so emit it as the UI would.)
+static func _type(box: SpinBox, value: float) -> void:
+	box.set_value_no_signal(value)
+	box.value_changed.emit(value)

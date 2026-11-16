@@ -66,10 +66,11 @@ func _run() -> void:
 
 	# The spin, set like the speed: right, 30 °/s, +50% by the finish.
 	var inspector := _editor._inspector
+	# Through the fields' own signals, as a click and typing would.
 	inspector._spin_direction.select(2)
+	inspector._spin_direction.item_selected.emit(2)
 	inspector._spin_rate.value = 30.0
 	inspector._spin_ramp.value = 50.0
-	inspector._spin_changed()
 	var scroll: ScrollContainer = inspector.get_child(0)
 	scroll.ensure_control_visible(inspector._spin_note)
 	await _frames(5)
