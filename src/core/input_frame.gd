@@ -12,6 +12,9 @@ var tilt: float = 0.0
 var jump_strength: float = -1.0
 ## True if the player tapped during this step (used for echo jumps).
 var tap: bool = false
+## True while a finger is down and could still become a swipe. The echo
+## hit-stop waits for it (up to a limit) so a swipe can reshape the jump.
+var holding: bool = false
 
 
 func _init(p_tilt: float = 0.0, p_jump_strength: float = -1.0, p_tap: bool = false) -> void:

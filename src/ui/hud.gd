@@ -6,6 +6,9 @@ extends Control
 signal pause_pressed
 
 var _chain: Label
+var _spin: Label
+var _spin_tween: Tween
+var _spin_shown := ""
 var _perfect: Label
 var _toast: Label
 var _chain_tween: Tween
@@ -32,6 +35,12 @@ func _ready() -> void:
 	pause.custom_minimum_size = Vector2(160, 88)
 	pause.pressed.connect(pause_pressed.emit)
 	top.add_child(pause)
+
+	# Ground spin: which way the tunnel is pushing the ball, and how hard.
+	_spin = UiStyle.display("", 64)
+	_spin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spin.modulate.a = 0.0
+	layout.add_child(_spin)
 
 	_toast = UiStyle.caption("", 26)
 	_toast.modulate.a = 0.0
@@ -74,6 +83,39 @@ func hide_chain() -> void:
 	_chain_tween = create_tween()
 	_chain_tween.tween_property(_chain, "modulate:a", 0.0, 0.2)
 	_chain_tween.parallel().tween_property(_perfect, "modulate:a", 0.0, 0.2)
+
+
+## Shows the spin as chevrons pointing the way the ball is being pushed:
+## one to three of them by strength. `flipped` plays the echo-flip pop.
+func set_spin(rate: float, flipped: bool = false) -> void:
+	var count := 0
+	var magnitude := absf(rate)
+	if magnitude >= 1.0:
+		count = 1 if magnitude < 20.0 else (2 if magnitude < 40.0 else 3)
+	var text := ("»" if rate > 0.0 else "«").repeat(count)
+	if text == _spin_shown and not flipped:
+		return
+	_spin_shown = text
+	if _spin_tween:
+		_spin_tween.kill()
+	_spin_tween = create_tween()
+	if text.is_empty():
+		_spin_tween.tween_property(_spin, "modulate:a", 0.0, 0.3)
+		return
+	_spin.text = text
+	_spin.pivot_offset = _spin.size * 0.5
+	_spin.scale = Vector2.ONE * (1.6 if flipped else 1.2)
+	_spin.modulate.a = 1.0
+	_spin_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_spin_tween.tween_property(_spin, "scale", Vector2.ONE, 0.25)
+	_spin_tween.tween_property(_spin, "modulate:a", 0.9, 0.4)
+
+
+func clear_spin() -> void:
+	_spin_shown = ""
+	if _spin_tween:
+		_spin_tween.kill()
+	_spin.modulate.a = 0.0
 
 
 func toast(text: String, seconds: float = 1.6) -> void:

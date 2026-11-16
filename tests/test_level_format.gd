@@ -54,3 +54,23 @@ func test_bundled_levels_load_and_are_playable() -> void:
 func test_validator_flags_unjumpable_ring() -> void:
 	var holes: Array[HoleData] = [HoleData.new(100.0, 40.0, 0.0, TAU)]
 	assert_false(LevelValidator.check(make_level(holes), make_tuning()).is_empty())
+
+
+func test_spin_round_trips_and_interpolates() -> void:
+	var level := make_level()
+	level.spin = [SpinKey.new(100.0, 20.0), SpinKey.new(0.0, 0.0), SpinKey.new(200.0, -40.0)]
+	level.sort()
+	var parsed := LevelSerializer.from_json(LevelSerializer.to_json(level))
+	assert_true(parsed.ok(), "round trip errors: %s" % [parsed.errors])
+	assert_eq(parsed.level.spin.size(), 3)
+	assert_near(parsed.level.spin_at(50.0), 10.0, 0.001)
+	assert_near(parsed.level.spin_at(150.0), -10.0, 0.001)
+	assert_near(parsed.level.spin_at(500.0), -40.0, 0.001, "holds the last key")
+
+
+func test_version_1_files_still_load_without_spin() -> void:
+	var text := '{"format_version": 1, "id": "old", "length": 100, "palette": [{"at": 0}, {"at": 1}], "holes": []}'
+	var parsed := LevelSerializer.from_json(text)
+	assert_true(parsed.ok(), "%s" % [parsed.errors])
+	assert_eq(parsed.level.spin.size(), 0)
+	assert_eq(parsed.level.spin_at(50.0), 0.0)

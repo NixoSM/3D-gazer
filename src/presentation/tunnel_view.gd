@@ -40,6 +40,13 @@ func set_level(p_level: LevelData, p_palette: LevelPalette, tuning: BallTuning) 
 	material.set_shader_parameter("level_length", level.length)
 	material.set_shader_parameter("tunnel_radius", level.tunnel_radius)
 	material.set_shader_parameter("ball_radius", tuning.ball_radius)
+	material.set_shader_parameter("band_length", band_length_for(level))
+
+
+## Faster levels get shorter light/dark bands, so the rings flicker past
+## noticeably quicker than the speed difference alone would suggest.
+static func band_length_for(level: LevelData) -> float:
+	return clampf(3.0 - (level.base_speed - 13.65) * 0.14, 1.8, 3.0)
 
 
 ## Call every frame with the camera's distance along the tunnel.

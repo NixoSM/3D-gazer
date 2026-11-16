@@ -24,6 +24,12 @@ var tilt_sensitivity: float = 1.0:
 		tilt_sensitivity = clampf(value, 0.4, 2.5)
 		_save()
 
+## The phone roll (degrees) the player wants treated as level. 0 = straight.
+var tilt_zero_degrees: float = 0.0:
+	set(value):
+		tilt_zero_degrees = clampf(value, -35.0, 35.0)
+		_save()
+
 var _loading := false
 
 
@@ -40,6 +46,7 @@ func _load() -> void:
 	sound_enabled = config.get_value("feedback", "sound", true)
 	invert_tilt = config.get_value("controls", "invert_tilt", false)
 	tilt_sensitivity = config.get_value("controls", "tilt_sensitivity", 1.0)
+	tilt_zero_degrees = config.get_value("controls", "tilt_zero_degrees", 0.0)
 	_loading = false
 
 
@@ -51,5 +58,6 @@ func _save() -> void:
 	config.set_value("feedback", "sound", sound_enabled)
 	config.set_value("controls", "invert_tilt", invert_tilt)
 	config.set_value("controls", "tilt_sensitivity", tilt_sensitivity)
+	config.set_value("controls", "tilt_zero_degrees", tilt_zero_degrees)
 	config.save(PATH)
 	changed.emit()

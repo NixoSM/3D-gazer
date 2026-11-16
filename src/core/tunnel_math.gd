@@ -11,6 +11,10 @@ extends RefCounted
 ##     so angle 0 is the bottom of the tunnel (y = -r) and the angle grows
 ##     towards +X, i.e. to the player's right when looking down the tunnel.
 
+## Thickness (m) of the tunnel's shell. Holes are cut through it, so a ball
+## that falls has to clear this much wall, and the renderer draws it.
+const WALL_THICKNESS := 0.45
+
 
 ## Wraps an angle to (-PI, PI].
 static func wrap_angle(angle: float) -> float:

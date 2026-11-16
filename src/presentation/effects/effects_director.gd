@@ -19,9 +19,11 @@ func _ready() -> void:
 func _on_event(event: BallSimulation.SimEvent) -> void:
 	var accent := world.palette.accent_at(session.level.progress_at(event.s))
 	match event.type:
+		E.ECHO_HIT:
+			_echo(event, accent)
 		E.JUMPED:
 			if event.echo:
-				_echo(event, accent)
+				_echo_takeoff(event)
 			else:
 				var fraction := inverse_lerp(session.tuning.min_jump_height, session.tuning.max_jump_height, event.height)
 				synth.play_jump(fraction)
@@ -38,6 +40,13 @@ func _on_event(event: BallSimulation.SimEvent) -> void:
 			synth.play_fall()
 			world.camera.shake(0.6)
 			Platform.haptic(Platform.Haptic.HEAVY)
+		E.BUMPED:
+			# The ball hit the wall of a hole on its way down.
+			var hit := clampf(event.height / 12.0, 0.2, 1.0)
+			synth.play_land(hit)
+			world.ball.kick(-1.0 - hit)
+			world.camera.shake(0.3 + 0.5 * hit)
+			Platform.haptic(Platform.Haptic.MEDIUM)
 		E.FINISHED:
 			world.tunnel.add_ripple(event.s, event.angle, world.now(), 1.6)
 			world.camera.punch(6.0)
@@ -45,7 +54,8 @@ func _on_event(event: BallSimulation.SimEvent) -> void:
 			Platform.haptic(Platform.Haptic.SUCCESS)
 
 
-## The echo: the signature moment. Strength grows with the chain, and
+## The echo: the signature moment. It lands on the hit-stop, so the wave
+## spreads while the world holds still. Strength grows with the chain, and
 ## perfect timing gets a brighter wave, a bell overtone and a firmer haptic.
 func _echo(event: BallSimulation.SimEvent, accent: Color) -> void:
 	var chain_boost := minf(event.chain * 0.12, 0.6)
@@ -57,3 +67,12 @@ func _echo(event: BallSimulation.SimEvent, accent: Color) -> void:
 	synth.play_land(1.0)
 	synth.play_echo(event.chain, event.perfect)
 	Platform.haptic(Platform.Haptic.HEAVY if event.perfect else Platform.Haptic.MEDIUM)
+
+
+## End of the hit-stop: the ball takes off again.
+func _echo_takeoff(event: BallSimulation.SimEvent) -> void:
+	world.ball.kick(0.9)
+	if event.spin_flipped:
+		# The tunnel changes direction: a second wave from the far side and a whoosh.
+		world.tunnel.add_ripple(event.s, event.angle + PI, world.now(), 1.0)
+		synth.play_jump(1.0)

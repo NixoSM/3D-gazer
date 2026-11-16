@@ -62,11 +62,14 @@ it that way: no `randf()`, no wall-clock time, no reading nodes.
 
 ## Rendering the tunnel
 
-`TunnelView` keeps geometry only around the camera: 18 m chunks from one
-chunk behind to 150 m ahead, at most two new ones built a frame.
+`TunnelView` keeps geometry only around the camera: 18 m chunks (plus a
+0.3 m overlap each side, which hides the seams) from one chunk behind to
+150 m ahead, at most two new ones built a frame.
 `TunnelMeshBuilder` lays a grid on the chunk whose lines include every
 hole edge, so each cell is entirely wall or entirely hole, then adds rim
-faces wherever wall meets hole. All chunks share one `ShaderMaterial`;
+faces wherever wall meets hole, through the shell thickness
+`TunnelMath.WALL_THICKNESS` that the simulation also uses for falls. All
+chunks share one `ShaderMaterial`;
 per-frame inputs (ball position, ripples, fog colour, fade) are uniforms.
 
 The Mobile renderer is used on device. Every shader is unshaded with

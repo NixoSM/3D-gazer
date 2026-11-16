@@ -20,12 +20,34 @@ var speed_ramp: float = 0.2
 var palette: Array[PaletteStop] = []
 ## Holes, sorted by `s_start`.
 var holes: Array[HoleData] = []
+## Ground spin keys, sorted by `s`. Empty means no spin.
+var spin: Array[SpinKey] = []
 
 var _cached_max_hole_length: float = -1.0
 
 
 func speed_at(s: float) -> float:
 	return SpeedProfile.speed_at(s, length, base_speed, speed_ramp)
+
+
+## Ground spin at distance s, in degrees per second (see SpinKey).
+func spin_at(s: float) -> float:
+	if spin.is_empty():
+		return 0.0
+	if s <= spin[0].s:
+		return spin[0].rate
+	for i in range(1, spin.size()):
+		var b := spin[i]
+		if s < b.s:
+			var a := spin[i - 1]
+			var span := b.s - a.s
+			return b.rate if span <= 0.0001 else lerpf(a.rate, b.rate, (s - a.s) / span)
+	return spin[spin.size() - 1].rate
+
+
+## Ground spin at distance s as a sideways speed along the wall, m/s.
+func spin_speed_at(s: float) -> float:
+	return deg_to_rad(spin_at(s)) * tunnel_radius
 
 
 func duration() -> float:
@@ -36,11 +58,12 @@ func progress_at(s: float) -> float:
 	return clampf(s / length, 0.0, 1.0)
 
 
-## Keeps holes and palette sorted. Call after editing either list.
+## Keeps holes, palette and spin keys sorted. Call after editing either list.
 func sort() -> void:
 	_cached_max_hole_length = -1.0
 	holes.sort_custom(func(a: HoleData, b: HoleData) -> bool: return a.s_start < b.s_start)
 	palette.sort_custom(func(a: PaletteStop, b: PaletteStop) -> bool: return a.at < b.at)
+	spin.sort_custom(func(a: SpinKey, b: SpinKey) -> bool: return a.s < b.s)
 
 
 ## Index of the first hole that could still overlap distance `s`.

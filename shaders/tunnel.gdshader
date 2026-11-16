@@ -5,7 +5,8 @@
 // tunnel coordinates (s along the axis, angle around it), so the same maths
 // as the simulation drives the look:
 //   * colour        = palette sampled at s / level_length (you see upcoming colours ahead)
-//   * bands         = alternating light/dark rings that sell the speed
+//   * bands         = alternating light/dark rings that sell the speed; faster
+//                     levels get shorter bands, so they flicker past faster
 //   * contact shadow= a hard-edged blob under the ball
 //   * echo ripples  = bold outlined rings expanding *over the curved surface*;
 //                     they wrap around the tunnel and meet on the far side
@@ -23,7 +24,7 @@ uniform float tunnel_radius = 4.0;
 uniform vec3 outline_color : source_color = vec3(0.04, 0.03, 0.06);
 
 // Look
-uniform float band_length = 3.0;       // metres per light/dark ring
+uniform float band_length = 3.0;       // metres per light/dark ring (shorter on faster levels)
 uniform float band_contrast = 0.16;    // how much darker the dark rings are
 uniform float stripe_count = 6.0;      // thin lane lines around the tunnel (0 = none)
 uniform float shade_dark = 0.72;       // brightness of the "ceiling" half
@@ -79,10 +80,12 @@ void fragment() {
 	float band_fade = 1.0 - smoothstep(25.0, 55.0, length(world_pos - CAMERA_POSITION_WORLD));
 	vec3 color = wall * (1.0 - band * band_contrast * band_fade);
 
-	// Thin lane lines along the tunnel.
+	// Thin lane lines along the tunnel. Like the bands they fade with distance:
+	// far away they are thinner than a pixel and would break up into dashes.
 	if (stripe_count > 0.0) {
 		float lane = abs(fract(angle / TAU * stripe_count) - 0.5) * TAU * tunnel_radius / stripe_count;
-		color = mix(color, wall * 0.55, inside(abs(lane - TAU * tunnel_radius / stripe_count * 0.5), 0.04));
+		float lane_fade = 1.0 - smoothstep(30.0, 70.0, length(world_pos - CAMERA_POSITION_WORLD));
+		color = mix(color, wall * 0.55, inside(abs(lane - TAU * tunnel_radius / stripe_count * 0.5), 0.04) * lane_fade);
 	}
 
 	// --- Hard two-tone shading: the half of the tunnel above the ball is darker,
@@ -132,10 +135,15 @@ void fragment() {
 	}
 
 	// --- Distance fades into the void colour ------------------------------------------
-	float dist_cam = length(world_pos - CAMERA_POSITION_WORLD);
-	// Stepped, not smooth: three flat tones, like hand-painted depth.
-	float fog = smoothstep(fog_distance * 0.3, fog_distance, dist_cam);
-	fog = floor(fog * 3.0 + 0.5) / 3.0;
+	// Measured along the tunnel and stepped once per band, so each band is one
+	// flat tone and the steps coincide with band edges: no extra lines, and
+	// nothing cutting across holes. Far away (where the bands are thinner
+	// than a few pixels) it becomes a smooth fade to avoid shimmer.
+	float ahead = s + CAMERA_POSITION_WORLD.z;
+	float band_mid = (floor(s / band_length) + 0.5) * band_length + CAMERA_POSITION_WORLD.z;
+	float fog_smooth = smoothstep(fog_distance * 0.3, fog_distance, ahead);
+	float fog_stepped = smoothstep(fog_distance * 0.3, fog_distance, band_mid);
+	float fog = mix(fog_stepped, fog_smooth, smoothstep(45.0, 70.0, ahead));
 	color = mix(color, fog_color, fog);
 	color = mix(color, fade_color, fade);
 

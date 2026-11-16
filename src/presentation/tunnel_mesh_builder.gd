@@ -11,10 +11,16 @@ extends RefCounted
 ## shell rather than as flat decals, and a flat strip on the wall along the
 ## same edge: together they draw the thick cartoon outline around each hole.
 ## Rim faces are tagged COLOR.r = 1 and outline strips COLOR.g = 1.
+##
+## Neighbouring chunks have different angle breaks (their holes differ), so
+## their edges would not meet exactly: the chords sag differently and leave
+## hairline cracks to the void. Each chunk therefore overlaps its neighbours
+## by SKIRT metres, which hides the seam completely.
 
-const ANGULAR_SEGMENTS := 72
+const ANGULAR_SEGMENTS := 120
 const ROW_LENGTH := 3.0
-const WALL_THICKNESS := 0.45
+const WALL_THICKNESS := TunnelMath.WALL_THICKNESS
+const SKIRT := 0.3
 ## Width (m) of the black outline drawn on the wall around every hole.
 const OUTLINE_WIDTH := 0.16
 ## Outlines float this far off the wall, towards the axis, to avoid z-fighting.
@@ -24,7 +30,9 @@ enum Kind { WALL, RIM, OUTLINE }
 const EPSILON := 0.0005
 
 
-static func build_chunk(level: LevelData, s0: float, s1: float) -> ArrayMesh:
+static func build_chunk(level: LevelData, chunk_start: float, chunk_end: float) -> ArrayMesh:
+	var s0 := maxf(chunk_start - SKIRT, -SKIRT)
+	var s1 := chunk_end + SKIRT
 	var radius := level.tunnel_radius
 	var holes := level.holes_between(s0 - EPSILON, s1 + EPSILON)
 	var angles := _angle_breaks(holes)
@@ -143,21 +151,25 @@ static func _wall_quad(tool: SurfaceTool, r: float, sa: float, sb: float, a0: fl
 		normal, Kind.WALL)
 
 
-## Rim along the tunnel (a hole edge at constant angle).
+## Rim along the tunnel (a hole edge at constant angle). It starts at the
+## outline strip's height, not the wall's, so strip and rim share an edge
+## and no sliver of wall shows between them at grazing angles.
 static func _side_rim(tool: SurfaceTool, r: float, sa: float, sb: float, angle: float) -> void:
+	var inner := r - OUTLINE_LIFT
 	var outer := r + WALL_THICKNESS
 	_quad(tool,
-		TunnelMath.point(sa, angle, r), TunnelMath.point(sa, angle, outer),
-		TunnelMath.point(sb, angle, outer), TunnelMath.point(sb, angle, r),
+		TunnelMath.point(sa, angle, inner), TunnelMath.point(sa, angle, outer),
+		TunnelMath.point(sb, angle, outer), TunnelMath.point(sb, angle, inner),
 		TunnelMath.tangent(angle), Kind.RIM)
 
 
 ## Rim across the tunnel (a hole edge at constant s).
 static func _end_rim(tool: SurfaceTool, r: float, s: float, a0: float, a1: float) -> void:
+	var inner := r - OUTLINE_LIFT
 	var outer := r + WALL_THICKNESS
 	_quad(tool,
-		TunnelMath.point(s, a0, r), TunnelMath.point(s, a0, outer),
-		TunnelMath.point(s, a1, outer), TunnelMath.point(s, a1, r),
+		TunnelMath.point(s, a0, inner), TunnelMath.point(s, a0, outer),
+		TunnelMath.point(s, a1, outer), TunnelMath.point(s, a1, inner),
 		Vector3(0.0, 0.0, 1.0), Kind.RIM)
 
 

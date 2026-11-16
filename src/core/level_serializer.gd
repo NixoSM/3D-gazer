@@ -6,8 +6,12 @@ extends RefCounted
 ## will write, and tests check that a level survives a round trip unchanged.
 ## Angles are stored in degrees in JSON (friendlier to humans and tools) and
 ## in radians in memory.
+##
+## Version history: 1 = holes and palette; 2 adds the optional `spin` keys.
+## Older versions are read as if every new field had its default.
 
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2
+const OLDEST_SUPPORTED_VERSION := 1
 
 
 class Result:
@@ -42,8 +46,8 @@ static func from_json(text: String, source_name: String = "<string>") -> Result:
 static func from_dict(data: Dictionary, source_name: String = "<dict>") -> Result:
 	var result := Result.new()
 	var version := int(data.get("format_version", 0))
-	if version != FORMAT_VERSION:
-		result.errors.append("%s: unsupported format_version %d (expected %d)" % [source_name, version, FORMAT_VERSION])
+	if version < OLDEST_SUPPORTED_VERSION or version > FORMAT_VERSION:
+		result.errors.append("%s: unsupported format_version %d (expected %d..%d)" % [source_name, version, OLDEST_SUPPORTED_VERSION, FORMAT_VERSION])
 		return result
 
 	var level := LevelData.new()
@@ -68,6 +72,9 @@ static func from_dict(data: Dictionary, source_name: String = "<dict>") -> Resul
 			deg_to_rad(float(entry.get("angle", 0.0))),
 			deg_to_rad(float(entry.get("width", 45.0)))))
 
+	for entry in data.get("spin", []):
+		level.spin.append(SpinKey.new(float(entry.get("s", 0.0)), float(entry.get("rate", 0.0))))
+
 	level.sort()
 	result.errors.append_array(validate(level, source_name))
 	result.level = level
@@ -91,6 +98,9 @@ static func to_dict(level: LevelData) -> Dictionary:
 			"angle": snappedf(rad_to_deg(hole.angle_center), 0.1),
 			"width": snappedf(rad_to_deg(hole.angle_width), 0.1),
 		})
+	var spin := []
+	for key in level.spin:
+		spin.append({"s": snappedf(key.s, 0.01), "rate": snappedf(key.rate, 0.1)})
 	return {
 		"format_version": FORMAT_VERSION,
 		"id": level.id,
@@ -100,6 +110,7 @@ static func to_dict(level: LevelData) -> Dictionary:
 		"base_speed": level.base_speed,
 		"speed_ramp": level.speed_ramp,
 		"palette": palette,
+		"spin": spin,
 		"holes": holes,
 	}
 
@@ -139,4 +150,10 @@ static func validate(level: LevelData, source_name: String = "<level>") -> Packe
 			errors.append("%s: hole %d width must be in (0, 360] degrees" % [source_name, i])
 		if hole.s_start < 0.0 or hole.s_end() > level.length:
 			errors.append("%s: hole %d lies outside the tunnel" % [source_name, i])
+	for i in level.spin.size():
+		var key := level.spin[i]
+		if key.s < 0.0 or key.s > level.length:
+			errors.append("%s: spin key %d lies outside the tunnel" % [source_name, i])
+		if absf(key.rate) > 180.0:
+			errors.append("%s: spin key %d rate must be within ±180 °/s" % [source_name, i])
 	return errors

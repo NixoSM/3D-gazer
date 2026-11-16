@@ -38,8 +38,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		gestures.tapped = true
 
 
-func calibrate() -> void:
-	tilt_reader.calibrate()
+func set_level_here() -> float:
+	return tilt_reader.set_level_here()
+
+
+func reset_level() -> void:
+	tilt_reader.reset_level()
 
 
 func current_tilt() -> float:
@@ -49,6 +53,7 @@ func current_tilt() -> float:
 ## The next InputFrame. One-shot gestures are consumed by this call.
 func take_frame() -> InputFrame:
 	var frame := InputFrame.new(_tilt, gestures.swipe_strength if enabled else -1.0, gestures.tapped and enabled)
+	frame.holding = enabled and gestures.is_holding()
 	gestures.consume()
 	return frame
 

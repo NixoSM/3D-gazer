@@ -5,11 +5,16 @@ extends Control
 signal resume_pressed
 signal restart_pressed
 signal quit_pressed
+## "Treat the way I hold the phone now as level."
+signal set_level_pressed
+signal reset_level_pressed
 
 var _haptics: Button
 var _sound: Button
 var _invert: Button
 var _sensitivity: Label
+var _level: Label
+var _level_reset: Button
 
 
 func _ready() -> void:
@@ -62,6 +67,19 @@ func _ready() -> void:
 	sensitivity_row.add_child(more)
 	layout.add_child(sensitivity_row)
 
+	# Level is "phone straight" unless the player chooses another angle.
+	_level = UiStyle.caption("", 24)
+	layout.add_child(_level)
+	var level_row := HBoxContainer.new()
+	level_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var set_here := UiStyle.button("use this angle")
+	set_here.pressed.connect(func() -> void: set_level_pressed.emit(); _refresh())
+	_level_reset = UiStyle.button("straight")
+	_level_reset.pressed.connect(func() -> void: reset_level_pressed.emit(); _refresh())
+	level_row.add_child(set_here)
+	level_row.add_child(_level_reset)
+	layout.add_child(level_row)
+
 	var gap2 := Control.new()
 	gap2.custom_minimum_size = Vector2(0, 40)
 	layout.add_child(gap2)
@@ -76,3 +94,6 @@ func _refresh() -> void:
 	_sound.text = "SOUND  %s" % ("ON" if Settings.sound_enabled else "OFF")
 	_invert.text = "TILT  %s" % ("INVERTED" if Settings.invert_tilt else "NORMAL")
 	_sensitivity.text = "SENSITIVITY %.1f" % Settings.tilt_sensitivity
+	var zero := Settings.tilt_zero_degrees
+	_level.text = "LEVEL: PHONE STRAIGHT" if absf(zero) < 0.5 else "LEVEL: PHONE %d° %s" % [roundi(absf(zero)), "RIGHT" if zero > 0.0 else "LEFT"]
+	_level_reset.visible = absf(zero) >= 0.5

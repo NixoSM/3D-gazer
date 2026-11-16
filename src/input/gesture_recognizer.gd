@@ -44,6 +44,11 @@ func handle(event: InputEvent, screen_height: float) -> bool:
 	return false
 
 
+## A finger is down and has not produced a swipe yet.
+func is_holding() -> bool:
+	return _active_index != -1 and not _fired
+
+
 ## Clears the one-shot gestures once they have been handed to the simulation.
 func consume() -> void:
 	tapped = false

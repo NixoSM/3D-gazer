@@ -57,7 +57,6 @@ func start_run() -> void:
 	attempt += 1
 	running = true
 	if input_router:
-		input_router.calibrate()
 		input_router.enabled = true
 
 
