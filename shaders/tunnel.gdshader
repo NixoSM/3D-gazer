@@ -22,6 +22,7 @@ render_mode unshaded, cull_disabled, fog_disabled;
 
 const int MAX_RIPPLES = 6;
 
+#define HOLES_BAKED
 #include "res://shaders/holes.gdshaderinc"
 
 uniform sampler2D wall_gradient : source_color, filter_linear, repeat_disable;
@@ -188,10 +189,11 @@ void fragment() {
 	}
 
 	// --- Edges: the thick black outline ---------------------------------------------
-	// Never thinner than ~2 pixels, so at grazing angles the floor still
-	// ends in a clean black line instead of breaking up.
-	float outline = max(outline_width, pixel * 2.0);
-	color = mix(color, outline_color, 1.0 - smoothstep(outline - pixel, outline + pixel, d));
+	// A fixed width on the wall. (It used to be widened to at least two
+	// pixels, measured with fwidth(d); at grazing angles that measure is
+	// several times the true pixel size, and far corners grew black spikes.)
+	float soft = min(pixel, outline_width * 0.6);
+	color = mix(color, outline_color, 1.0 - smoothstep(outline_width - soft, outline_width + soft, d));
 
 	// --- Distance fades into the void colour, along the tunnel ---------------------
 	float ahead = s + CAMERA_POSITION_WORLD.z;

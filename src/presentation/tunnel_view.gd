@@ -17,6 +17,16 @@ const BEHIND := 1
 const VIEW_DISTANCE := 150.0
 const MAX_BUILDS_PER_FRAME := 2
 const MAX_RIPPLES := 6
+## The baked hole field (see HOLES_BAKED in shaders/holes.gdshaderinc):
+## metres of level per strip, metres of guard at each end of a strip,
+## texels per metre, and rows per strip (256 around + 2 guard rows each side).
+const FIELD_STRIP := 480.0
+const FIELD_GUARD := 1.0
+const FIELD_TEXELS := 8.0
+const FIELD_STRIP_ROWS := 260
+
+## Emitted when the hole field of the current level has been baked (tools check it).
+signal field_baked(image: Image)
 
 var level: LevelData
 var palette: LevelPalette
@@ -48,6 +58,7 @@ var face_style := 1:
 var _chunks := {}  # chunk index -> MeshInstance3D
 var _ripples: Array[Vector4] = []
 var _next_ripple := 0
+var _bake_serial := 0
 
 
 func _ready() -> void:
@@ -73,8 +84,51 @@ func set_level(p_level: LevelData, p_palette: LevelPalette, tuning: BallTuning) 
 	_set_both("tunnel_radius", level.tunnel_radius)
 	material.set_shader_parameter("ball_radius", tuning.ball_radius)
 	_set_both("band_length", band_length_for(level))
-	_set_both("hole_data", hole_texture(level))
+	_bake_field()
 	material.set_shader_parameter("pattern", pattern)
+
+
+## Bakes the level's hole field into a texture, on the GPU, with the same
+## shader code that defines the holes (hole_field_bake.gdshader). The tunnel
+## shaders then take one sample per look-up instead of evaluating every
+## nearby hole. Until the bake lands (one frame) the tunnel is drawn whole.
+func _bake_field() -> void:
+	_bake_serial += 1
+	var serial := _bake_serial
+	var strips := maxi(int(ceil((level.length + 8.0) / FIELD_STRIP)), 1)
+	var layout := Vector4(FIELD_STRIP, FIELD_GUARD, FIELD_TEXELS, strips)
+	_set_both("field_layout", layout)
+	var blank := Image.create(1, 1, false, Image.FORMAT_RH)
+	blank.set_pixel(0, 0, Color(1.0, 0.0, 0.0))
+	_set_both("hole_field", ImageTexture.create_from_image(blank))
+
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(int((FIELD_STRIP + 2.0 * FIELD_GUARD) * FIELD_TEXELS), FIELD_STRIP_ROWS * strips)
+	viewport.disable_3d = true
+	viewport.use_hdr_2d = true  # 16-bit floats: 8 bits would step the edges
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var bake := ShaderMaterial.new()
+	bake.shader = preload("res://shaders/hole_field_bake.gdshader")
+	bake.set_shader_parameter("hole_data", hole_texture(level))
+	bake.set_shader_parameter("hole_first", 0)
+	bake.set_shader_parameter("hole_count", level.holes.size())
+	bake.set_shader_parameter("tunnel_radius", level.tunnel_radius)
+	bake.set_shader_parameter("field_layout", layout)
+	var rect := ColorRect.new()
+	rect.size = viewport.size
+	rect.material = bake
+	viewport.add_child(rect)
+	add_child(viewport)
+	await RenderingServer.frame_post_draw
+	if not is_instance_valid(viewport):
+		return
+	var image := viewport.get_texture().get_image()
+	viewport.queue_free()
+	if serial != _bake_serial:
+		return  # another level was set meanwhile
+	image.convert(Image.FORMAT_RH)
+	_set_both("hole_field", ImageTexture.create_from_image(image))
+	field_baked.emit(image)
 
 
 ## The level's holes packed for the shader: two RGBA float texels each,
@@ -164,21 +218,18 @@ func clear_ripples() -> void:
 func _build_chunk(index: int) -> void:
 	var start := index * CHUNK_LENGTH
 	var end := (index + 1) * CHUNK_LENGTH
-	var holes := TunnelMeshBuilder.hole_range(level, start, end)
-	var instance := _tube("Chunk%d" % index, TunnelMeshBuilder.build_chunk(level, start, end), material, holes)
+	var instance := _tube("Chunk%d" % index, TunnelMeshBuilder.build_chunk(level, start, end), material)
 	add_child(instance)
 	if shell_thickness > 0.0:
-		var shell := _tube("Shell", TunnelMeshBuilder.build_chunk(level, start, end, shell_thickness), shell_material, holes)
+		var shell := _tube("Shell", TunnelMeshBuilder.build_chunk(level, start, end, shell_thickness), shell_material)
 		instance.add_child(shell)
 	_chunks[index] = instance
 
 
-static func _tube(tube_name: String, mesh: ArrayMesh, tube_material: ShaderMaterial, holes: Vector2i) -> MeshInstance3D:
+static func _tube(tube_name: String, mesh: ArrayMesh, tube_material: ShaderMaterial) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.name = tube_name
 	instance.mesh = mesh
 	instance.material_override = tube_material
-	instance.set_instance_shader_parameter("hole_first", holes.x)
-	instance.set_instance_shader_parameter("hole_count", holes.y)
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return instance

@@ -10,6 +10,7 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
 
+#define HOLES_BAKED
 #include "res://shaders/holes.gdshaderinc"
 
 uniform sampler2D wall_gradient : source_color, filter_linear, repeat_disable;

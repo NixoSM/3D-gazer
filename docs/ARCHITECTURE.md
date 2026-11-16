@@ -89,6 +89,15 @@ views over open void (`tools/perf_probe.tscn` compares views). Both shaders shar
 field through `shaders/holes.gdshaderinc`. All chunks share one `ShaderMaterial`; per-frame inputs
 (ball position, ripples, fog colour, fade) are uniforms.
 
+**The hole field is baked.** The tunnel shaders do not evaluate the holes'
+maths per pixel (that made views over open void lag on the phone). When a
+level is set, `TunnelView._bake_field()` draws the field once into a
+texture with `hole_field_bake.gdshader`, which runs the very functions in
+`holes.gdshaderinc`; the 3D shaders define `HOLES_BAKED` and take one
+filtered sample per look-up. `tools/field_check.tscn` compares the bake
+with `LevelData.floor_distance` (within a few millimetres), and
+`tools/perf_probe.tscn` compares frame times per view.
+
 The Mobile renderer is used on device. Every shader is unshaded with
 hand-written flat (cel) shading, so the look is the same on the Mobile and
 Compatibility renderers (screenshots are rendered with Compatibility under
