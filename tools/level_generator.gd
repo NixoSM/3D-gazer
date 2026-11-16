@@ -119,6 +119,35 @@ func generate(spec: Spec, tuning: BallTuning) -> LevelData:
 	return _level
 
 
+## Cuts one section (a Spec.sections entry: p, n, i) into an existing
+## level from distance `s`, with the safe path starting at `path_angle`.
+## Returns the holes it added (already in `level`, which is re-sorted) and
+## where the section ends. The level editor's "Insert pattern" uses this,
+## so handmade levels can mix in generated stretches.
+func stamp(level: LevelData, tuning: BallTuning, section: Dictionary, s: float, path_angle: float, seed: int, hole_scale: float = 1.0) -> Dictionary:
+	_rng.seed = seed
+	_tuning = tuning
+	_spec = Spec.new()
+	_spec.hole_scale = hole_scale
+	_level = level
+	_path_angle = TunnelMath.wrap_angle_positive(path_angle)
+	_spread = 0.0
+	_last_end = s
+	_spin_rate = level.spin_at(s)
+	var before := level.holes.size()
+	var end := _place(section, s, float(section.get("i", 0.5)))
+	var added: Array[HoleData] = []
+	for i in range(before, level.holes.size()):
+		added.append(level.holes[i])
+	# Patterns near the finish may overrun it: drop what does not fit.
+	for hole in added.duplicate():
+		if hole.s_end() > level.length:
+			level.holes.erase(hole)
+			added.erase(hole)
+	level.sort()
+	return {"holes": added, "end": end}
+
+
 func _set_spin(s: float, rate: float, ramp_seconds: float) -> void:
 	var ramp := maxf(_level.speed_at(s) * ramp_seconds, 0.5)
 	_level.spin.append(SpinKey.new(s, _spin_rate))

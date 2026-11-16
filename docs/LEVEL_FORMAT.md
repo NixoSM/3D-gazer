@@ -70,11 +70,16 @@ steps big and even, they read better than many small ones.
   `godot --headless --script res://tools/trace_autopilot.gd -- <id> [delay]`
   to see where it struggles.
 
-## Making levels today
+## Making levels
 
-`tools/generate_levels.gd` holds a spec per bundled level (seed, speed,
-palette and a script of sections: pattern, count, intensity, spin) and
-writes the JSON with `LevelGenerator`. Edit a spec and re-run:
+Use the **level editor** ([LEVEL_EDITOR.md](LEVEL_EDITOR.md)): a desktop
+app (Windows, macOS) built from this project that edits these files with
+live bot play-throughs, jump checks and a built-in playtest.
+
+The bundled levels are generated: `tools/generate_levels.gd` holds a spec
+per level (seed, speed, palette and a script of sections: pattern, count,
+intensity, spin) and writes the JSON with `LevelGenerator`. Edit a spec and
+re-run:
 
 ```sh
 godot --headless --script res://tools/generate_levels.gd -- --verbose
@@ -83,22 +88,7 @@ godot --headless --script res://tools/generate_levels.gd -- --verbose
 `--verbose` prints when each section starts and how long it lasts, and the
 summary says how many sections fitted in the level's minute.
 
-Generated files are ordinary level files: hand-edit them freely, but note
-that re-running the generator overwrites them.
-
-## The future level editor
-
-Everything an editor needs already exists and is engine-node-free:
-
-- **Model**: `LevelData`, `HoleData`, `PaletteStop`, editable in memory.
-- **Load/save**: `LevelSerializer.load_file()` / `save_file()` (round-trip tested).
-- **Live validation**: `LevelValidator.check()` is cheap enough to run on every edit.
-- **Preview**: `TunnelMeshBuilder.build_chunk()` renders any stretch, and
-  `TunnelView.set_level()` accepts an edited level directly.
-- **Test play**: load the edited `LevelData` into `GameSession`; `Autopilot`
-  can demonstrate that it is beatable.
-
-A natural editor view is the tunnel **unrolled**: a 2D strip with `s`
-running up the screen and angle across it (wrapping at the edges), where
-holes are plain rectangles to drag and resize. That is exactly the
-simulation's own coordinate system.
+Generated files are ordinary level files: open them in the editor or edit
+them by hand freely, but re-running the generator overwrites them. Save
+edited copies under a new id. The editor's "Insert a pattern" uses the same
+generator (`LevelGenerator.stamp()`) for one section at a time.

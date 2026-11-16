@@ -131,6 +131,14 @@ func reset(start_angle: float = 0.0) -> void:
 	_freeze_perfect = false
 
 
+## Starts a fresh run from distance `start_s` instead of the start line
+## (the level editor's "play from here").
+func place(start_s: float, start_angle: float = 0.0) -> void:
+	reset(start_angle)
+	s = clampf(start_s, 0.0, level.length)
+	forward_speed = level.speed_at(s)
+
+
 func progress() -> float:
 	return level.progress_at(s)
 

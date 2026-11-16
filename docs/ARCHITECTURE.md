@@ -32,6 +32,7 @@ is the property that makes the game safe to restyle and simple to test.
 | Presentation | `src/presentation/`, `shaders/` | core, gameplay | Reads state, never writes it. |
 | UI | `src/ui/` | presentation (for colours), `Settings` | Built in code with `UiStyle` helpers. |
 | App | `src/app/` | everything | `Main` state machine, `Settings` and `Progress` autoloads. |
+| Editor | `src/editor/` | everything (and `tools/level_generator.gd`) | The desktop level editor, a separate main scene for the `level_editor` feature tag. The game never depends on it. See LEVEL_EDITOR.md. |
 | Platform | `src/platform/` | `Settings` | The only place that calls platform APIs. |
 
 ## Coordinates
@@ -98,9 +99,9 @@ a software GPU).
 | You want to… | Touch |
 |---|---|
 | Tune how the ball feels | `resources/ball_tuning.tres` in the inspector |
-| Add a level | A JSON file in `levels/` and its id in `levels/manifest.json` (see LEVEL_FORMAT.md) |
+| Add a level | Make it in the level editor (LEVEL_EDITOR.md); the JSON goes in `levels/` and its id in `levels/manifest.json` |
 | Add a hole pattern | `tools/level_generator.gd`, then re-run `tools/generate_levels.gd` |
-| Add a new obstacle type | `LevelData` + serializer (bump `format_version`), `BallSimulation`, the mesh builder or a new view, the validator, tests |
+| Add a new obstacle type | `LevelData` + serializer (bump `format_version`), `BallSimulation`, the mesh builder or a new view, the validator, the editor (`StripView` and `editor_strip.gdshader`), tests |
 | Add a ball look | Duplicate `resources/balls/classic.tres`, edit it, apply with `BallView.apply_skin()` |
 | Change sounds | `ToneSynth` (keep the `play_*` API) |
 | Change haptics | `PlatformServices.HAPTIC_PATTERNS` |
