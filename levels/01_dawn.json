@@ -1,0 +1,247 @@
+{
+  "format_version": 1,
+  "id": "01_dawn",
+  "name": "Dawn",
+  "length": 898.0,
+  "tunnel_radius": 4.0,
+  "base_speed": 13.65,
+  "speed_ramp": 0.2,
+  "palette": [
+    {
+      "at": 0.0,
+      "wall": "#ffc93c",
+      "void": "#3a1c80",
+      "accent": "#ffffff"
+    },
+    {
+      "at": 0.35,
+      "wall": "#ff8f3c",
+      "void": "#33166e",
+      "accent": "#fff36b"
+    },
+    {
+      "at": 0.7,
+      "wall": "#ff4f7b",
+      "void": "#26105a",
+      "accent": "#fff36b"
+    },
+    {
+      "at": 1.0,
+      "wall": "#c94bff",
+      "void": "#150a3c",
+      "accent": "#7dfcff"
+    }
+  ],
+  "holes": [
+    {
+      "s": 47.78,
+      "length": 3.43,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 69.7,
+      "length": 6.59,
+      "angle": 156.8,
+      "width": 205.7
+    },
+    {
+      "s": 92.53,
+      "length": 5.63,
+      "angle": 140.2,
+      "width": 198.9
+    },
+    {
+      "s": 116.23,
+      "length": 6.74,
+      "angle": 118.9,
+      "width": 201.7
+    },
+    {
+      "s": 137.56,
+      "length": 3.59,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 162.72,
+      "length": 4.8,
+      "angle": 151.0,
+      "width": 213.9
+    },
+    {
+      "s": 182.16,
+      "length": 6.4,
+      "angle": 158.8,
+      "width": 210.9
+    },
+    {
+      "s": 203.21,
+      "length": 3.71,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 221.56,
+      "length": 3.61,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 241.7,
+      "length": 7.74,
+      "angle": 142.9,
+      "width": 216.2
+    },
+    {
+      "s": 264.11,
+      "length": 7.87,
+      "angle": 148.6,
+      "width": 212.8
+    },
+    {
+      "s": 286.65,
+      "length": 3.86,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 305.16,
+      "length": 3.88,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 330.93,
+      "length": 9.45,
+      "angle": 118.0,
+      "width": 201.9
+    },
+    {
+      "s": 362.52,
+      "length": 7.83,
+      "angle": 87.1,
+      "width": 203.2
+    },
+    {
+      "s": 386.78,
+      "length": 6.4,
+      "angle": 101.6,
+      "width": 221.4
+    },
+    {
+      "s": 407.79,
+      "length": 7.45,
+      "angle": 104.3,
+      "width": 218.5
+    },
+    {
+      "s": 432.9,
+      "length": 9.54,
+      "angle": 87.2,
+      "width": 217.6
+    },
+    {
+      "s": 457.03,
+      "length": 4.13,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 475.71,
+      "length": 4.14,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 507.03,
+      "length": 9.05,
+      "angle": 134.2,
+      "width": 228.6
+    },
+    {
+      "s": 555.08,
+      "length": 4.35,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 573.95,
+      "length": 4.48,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 592.94,
+      "length": 4.3,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 611.75,
+      "length": 4.47,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 640.31,
+      "length": 6.97,
+      "angle": 101.0,
+      "width": 217.6
+    },
+    {
+      "s": 668.43,
+      "length": 10.12,
+      "angle": 77.2,
+      "width": 231.2
+    },
+    {
+      "s": 694.54,
+      "length": 8.07,
+      "angle": 88.7,
+      "width": 223.4
+    },
+    {
+      "s": 717.22,
+      "length": 8.56,
+      "angle": 94.8,
+      "width": 233.6
+    },
+    {
+      "s": 740.43,
+      "length": 4.4,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 759.52,
+      "length": 4.45,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 778.7,
+      "length": 4.73,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 805.16,
+      "length": 9.37,
+      "angle": 118.7,
+      "width": 231.6
+    },
+    {
+      "s": 829.4,
+      "length": 4.69,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 849.03,
+      "length": 4.56,
+      "angle": 0.0,
+      "width": 360.0
+    }
+  ]
+}
