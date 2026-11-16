@@ -31,7 +31,9 @@ const EPSILON := 0.0005
 
 
 static func build_chunk(level: LevelData, chunk_start: float, chunk_end: float) -> ArrayMesh:
-	var s0 := maxf(chunk_start - SKIRT, -SKIRT)
+	# Chunks before s = 0 exist too: the camera starts behind the ball and
+	# must not see the open end of the tube.
+	var s0 := chunk_start - SKIRT
 	var s1 := chunk_end + SKIRT
 	var radius := level.tunnel_radius
 	var holes := level.holes_between(s0 - EPSILON, s1 + EPSILON)

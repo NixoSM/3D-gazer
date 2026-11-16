@@ -29,7 +29,8 @@ func _on_event(event: BallSimulation.SimEvent) -> void:
 				synth.play_jump(fraction)
 				world.ball.kick(0.6 + fraction * 0.6)
 		E.LANDED:
-			if not event.echo:
+			# Tiny dips (teetering on an edge) are not landings worth a thud.
+			if not event.echo and event.height > 2.5:
 				world.tunnel.add_ripple(event.s, event.angle, world.now(), 0.28)
 				world.ball.kick(-1.4)
 				synth.play_land(0.8)

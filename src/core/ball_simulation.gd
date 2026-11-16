@@ -33,7 +33,7 @@ enum Phase { ROLLING, AIRBORNE, FALLING, FINISHED, FROZEN }
 
 enum EventType {
 	JUMPED,        ## Left the ground. data: height, echo, perfect, chain, spin_flipped
-	LANDED,        ## Touched down safely. data: echo_queued
+	LANDED,        ## Touched down safely. data: echo, height = impact speed (m/s)
 	CHAIN_BROKEN,  ## Landed and the echo window closed without a tap. data: chain
 	FELL,          ## Lost into a hole.
 	FINISHED,      ## Reached the end of the tunnel.
@@ -305,11 +305,13 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 		return
 
 	# Touchdown.
+	var impact := -vertical_speed
 	height = 0.0
 	vertical_speed = 0.0
 	_time_unsupported = INF
 
 	var landed := SimEvent.new(EventType.LANDED, s, angle)
+	landed.height = impact
 	landed.echo = _echo_queued
 	landed.chain = echo_chain
 	events.append(landed)

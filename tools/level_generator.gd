@@ -250,12 +250,14 @@ func _place_echo_run(s: float, intensity: float, count: int, pads: bool) -> floa
 ## keeps turning one way, fast enough to need a constant lean.
 func _place_bridge(s: float, intensity: float, segments: int, corkscrew: bool) -> float:
 	var gap := _degrees(110.0, 64.0, intensity) if not corkscrew else _degrees(125.0, 80.0, intensity)
-	# Short segments with small steps, so the edge reads as a smooth curve.
-	var segment_length := 1.25 * _speed_scale(s)
+	# Short segments with small steps, so the edge reads as a smooth curve
+	# rather than a staircase. `segments` counts 1.25 m-equivalent lengths.
+	segments *= 2
+	var segment_length := 0.625 * _speed_scale(s)
 	var direction := 1.0 if _rng.randf() < 0.5 else -1.0
 	var turn_per_segment := 0.0
 	if corkscrew:
-		var lateral := lerpf(2.6, 5.2, intensity)  # m/s along the wall
+		var lateral := lerpf(2.6, 4.4, intensity)  # m/s along the wall
 		turn_per_segment = lateral * (segment_length / _level.speed_at(s)) / _level.tunnel_radius * direction
 	else:
 		turn_per_segment = _max_drift(segment_length, intensity) * _rng.randf_range(0.35, 0.8) * direction
