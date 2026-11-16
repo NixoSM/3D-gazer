@@ -65,12 +65,16 @@ func update_view(camera_s: float, ball_s: float, ball_angle: float, ball_height:
 
 	material.set_shader_parameter("ball", Vector3(ball_s, ball_angle, ball_height))
 	material.set_shader_parameter("now", now)
-	var progress_ahead := (camera_s + 60.0) / level.length
-	material.set_shader_parameter("fog_color", palette.wall_at(progress_ahead).lerp(Color.WHITE, 0.3))
 
 
 func set_best_marker(s: float) -> void:
 	material.set_shader_parameter("best_s", s)
+
+
+func set_lighting(lamp_position: Vector3, lamp_color: Color, fog_color: Color) -> void:
+	material.set_shader_parameter("lamp_position", lamp_position)
+	material.set_shader_parameter("lamp_color", lamp_color)
+	material.set_shader_parameter("fog_color", fog_color)
 
 
 func set_fade(amount: float, color: Color) -> void:

@@ -44,7 +44,7 @@ toast. A thin dashed ring on the wall marks your best distance.
 Forward speed grows linearly with progress: `v = base · (1 + 0.2 · s/L)`.
 Because speed depends on position, the run time is
 `T = L / (0.2 · base) · ln(1.2)`, and levels are sized so that `T = 60 s`
-(see `SpeedProfile`). Camera FOV widens by 9° over the level to sell the
+(see `SpeedProfile`). Base speeds: Dawn 13.65 m/s, Tide 11.5, Ember 12.5. Camera FOV widens by 9° over the level to sell the
 extra speed.
 
 ## Level patterns
@@ -72,9 +72,8 @@ every level to the end with `Autopilot`.
 All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
 
 - Normal landing: a soft ripple, the ball squashes, a low thud, a light haptic.
-- Echo: a ripple that expands *over the cylinder*. Each tile lights up as
-  the wave passes it, the wave wraps around the tunnel and meets itself on
-  the far side. The ball flashes in the accent colour, the FOV kicks, a
+- Echo: a thin line of light that expands *over the cylinder*, with a soft
+  afterglow, wrapping around the tunnel to meet itself on the far side. The ball flashes in the accent colour, the FOV kicks, a
   glassy note plays (D-major pentatonic, one step higher per echo in the
   chain) and a medium haptic fires. A perfect echo adds a bell overtone, a
   brighter wave and a heavy haptic. The HUD shows `×N` from the second echo.
@@ -84,27 +83,35 @@ All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
 
 ## Visual language
 
-The aim is "glazed ceramic at different times of day", not neon on a grid.
+Dark, restrained and precise: few colours, fine detail, nothing busy. The
+quality should come from light and material, not from decoration.
 
-- **Tunnel**: tiles in a running bond (alternate rings offset by half a
-  tile), each with a slight tonal variation and a soft glaze highlight. The
-  side of the tunnel opposite the ball is darker, which reinforces which way
-  is down as the world turns.
-- **Holes**: cut through a 0.45 m thick shell. The cut shows a bright glazed
-  lip and then the darker ceramic body, and beyond it the void.
-- **Void**: a deep colour per palette stop, with sparse twinkling motes so
-  holes read as depth, and a glow straight ahead that the tunnel's fog fades
-  into: a light at the end of the tunnel that the player is always gazing at.
-- **Ball**: matte bone-white ceramic with two ink seams at right angles, so
-  rolling in either direction is visible. Its rim picks up the tunnel colour.
-- **Type**: Instrument Serif italic for names and numbers, Geist Mono in
-  spaced capitals for labels. No panels or buttons with borders; text sits
-  on the scene over a soft scrim.
+- **Light**: the only light is a lamp that travels just above and ahead of
+  the ball. The floor around the ball is lit; the rest of the tunnel falls
+  away into darkness. This keeps the eye on the ball and makes the tube's
+  rotation readable without any grid.
+- **Tunnel**: a dark shell with a brushed grain running along the direction
+  of travel (it streaks with speed), a satin sheen, and a machined seam every
+  4.5 m with a hairline highlight. Its tint shifts subtly with progress.
+- **Holes**: cut through a 0.45 m shell. The cut shows a thin bright lip in
+  the accent colour, then the dark body of the shell, then the void.
+- **Void**: the level's colour lives here, seen through every hole. It
+  glows towards the far end, where the darkness narrows to a single point
+  of light: the thing the player is always gazing at. Its colour is what
+  moves most visibly with progress.
+- **Ball** (default skin "Graphite"): polished dark metal with two hairline
+  seams at right angles so rolling reads in every direction. It mirrors the
+  glow ahead and the lit floor beneath it, plus a tight glint and a broad
+  satin sheen from the lamp. Looks are `BallSkin` resources
+  (`resources/balls/`), so new balls are data, not code.
+- **Type**: Geist ExtraLight for names and numbers, Geist Mono in spaced
+  capitals for labels. No panels or bordered buttons.
 
 ## Ideas not built yet
 
 - Ghost replays (the simulation is deterministic, so recording InputFrames is enough).
 - Attract mode: the Autopilot playing behind the menu.
 - Per-level music whose tempo matches the echo period.
-- Collectibles on risky lines (tile "glints") for players chasing mastery.
+- Collectibles on risky lines for players chasing mastery.
+- A ball picker (skins are already data: `BallSkin`).
 - The level editor (see [LEVEL_FORMAT.md](LEVEL_FORMAT.md)).

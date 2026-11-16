@@ -22,7 +22,7 @@ func _ready() -> void:
 	var top_gap := Control.new()
 	top_gap.custom_minimum_size = Vector2(0, 40)
 	layout.add_child(top_gap)
-	layout.add_child(UiStyle.serif("Gazer", 210))
+	layout.add_child(UiStyle.display("GAZER", 120, 34))
 	var subtitle := UiStyle.caption("a tunnel that turns around you", 20)
 	subtitle.modulate.a = 0.8
 	layout.add_child(subtitle)
@@ -67,7 +67,7 @@ func _row(index: int, info: Dictionary) -> Control:
 
 	var swatch := TextureRect.new()
 	var texture := GradientTexture2D.new()
-	texture.gradient = (info["palette"] as LevelPalette).wall
+	texture.gradient = (info["palette"] as LevelPalette).void_color
 	texture.width = 256
 	texture.height = 4
 	swatch.texture = texture

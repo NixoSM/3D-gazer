@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://d0rr0sadipmx2"
-path="res://.godot/imported/InstrumentSerif-Italic.woff2-b32043e86eeb9cbede6d7a933237c7df.fontdata"
+uid="uid://rbkkfru86bm6"
+path="res://.godot/imported/Geist-ExtraLight.woff2-38b0529c1bbab34a1f80b2aeafebbf7d.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/InstrumentSerif-Italic.woff2"
-dest_files=["res://.godot/imported/InstrumentSerif-Italic.woff2-b32043e86eeb9cbede6d7a933237c7df.fontdata"]
+source_file="res://assets/fonts/Geist-ExtraLight.woff2"
+dest_files=["res://.godot/imported/Geist-ExtraLight.woff2-38b0529c1bbab34a1f80b2aeafebbf7d.fontdata"]
 
 [params]
 

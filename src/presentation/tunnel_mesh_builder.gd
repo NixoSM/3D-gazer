@@ -8,7 +8,7 @@ extends RefCounted
 ##
 ## Wherever a solid cell touches an open one we add a "rim" face that goes
 ## outwards through the wall's thickness, so holes read as cuts in a thick
-## ceramic shell rather than as flat decals. Rim faces are tagged with
+## shell rather than as flat decals. Rim faces are tagged with
 ## COLOR.r = 1 so the shader can paint them with the accent colour.
 
 const ANGULAR_SEGMENTS := 72

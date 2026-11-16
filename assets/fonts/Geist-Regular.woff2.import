@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://bd81up7jlrbqf"
-path="res://.godot/imported/InstrumentSerif-Regular.woff2-7e6b026467f3d7acfcb47a929ab651c6.fontdata"
+uid="uid://bru0uxopngvw4"
+path="res://.godot/imported/Geist-Regular.woff2-9079034430cf9cb00728802747c013bf.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/InstrumentSerif-Regular.woff2"
-dest_files=["res://.godot/imported/InstrumentSerif-Regular.woff2-7e6b026467f3d7acfcb47a929ab651c6.fontdata"]
+source_file="res://assets/fonts/Geist-Regular.woff2"
+dest_files=["res://.godot/imported/Geist-Regular.woff2-9079034430cf9cb00728802747c013bf.fontdata"]
 
 [params]
 

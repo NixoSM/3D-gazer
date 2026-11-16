@@ -34,7 +34,7 @@ script, a spreadsheet export, the future editor) can make levels.
 | `tunnel_radius` | m | Inner radius. 4 m is tuned with the camera and jump heights. |
 | `base_speed` | m/s | Forward speed at the start. |
 | `speed_ramp` | fraction | Extra speed reached at the end (`0.2` = +20%), linear in progress. |
-| `palette[]` | | Colour stops by progress `at` in [0, 1]: `wall` (tiles), `void` (seen through holes), `accent` (hole lips, ripples, best-run marker). At least two stops. Interpolated in OKLab. |
+| `palette[]` | | Colour stops by progress `at` in [0, 1]: `wall` (tint of the dark shell: keep it dark and desaturated), `void` (seen through holes and at the far end; carries the level's mood), `accent` (hole lips, ripples, the lamp's tint, best-run marker). At least two stops. Interpolated in OKLab. |
 | `holes[]` | | Rectangles on the tunnel surface. Order does not matter (they are sorted on load). |
 | `holes[].s` | m | Where the hole starts along the tunnel. |
 | `holes[].length` | m | How long it is along the tunnel. |

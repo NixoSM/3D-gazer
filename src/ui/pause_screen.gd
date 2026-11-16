@@ -25,7 +25,7 @@ func _ready() -> void:
 	layout.add_theme_constant_override("separation", 8)
 	safe.add_child(layout)
 
-	layout.add_child(UiStyle.serif("Paused", 120))
+	layout.add_child(UiStyle.display("Paused", 96))
 	var resume := UiStyle.button("Resume", true)
 	resume.pressed.connect(resume_pressed.emit)
 	layout.add_child(resume)

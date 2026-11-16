@@ -2,20 +2,19 @@
 
 *A tunnel that turns around you.*
 
-You are a ceramic ball rolling down a glazed tunnel. Tilt the phone and the
+You are a polished dark ball rolling down a dark tunnel, lit only by a lamp that travels with you. Tilt the phone and the
 ball rolls across the wall as if you had tilted the floor; the camera turns
 with it, so wherever the ball is on the circumference, *down* is always
 under it and it is the world that rotates. Swipe up to jump (a bigger
 swipe means a higher jump). Tap the moment you land and the ball **echoes**
-the same jump, sending a wave of light across the tiles that wraps all the
-way around the tunnel and meets itself on the far side. Chain echoes and the
+the same jump, sending a thin line of light across the wall that wraps all
+the way around the tunnel and meets itself on the far side. Chain echoes and the
 notes climb a scale.
 
 Each level is about a minute long. The ball speeds up by 20% from start to
-finish, and the tunnel's colours move through a palette (blue hour to
-sunrise, shallows to deep sea, kiln-hot to cooled bone), so the colour
-around you tells you how far you are and the colour ahead shows what is
-coming.
+finish. The colour glowing through the holes and at the far end moves
+through a palette (night into sunrise, shallows to deep sea, kiln-hot to
+ash), so it tells you how far you are and shows what is coming.
 
 ![Screenshots](docs/media/screens.jpg)
 
@@ -80,7 +79,7 @@ src/
   platform/      The only code that touches platform APIs (haptics, screen)
 shaders/         Tunnel, ball and sky shaders
 levels/          Level JSON files + manifest.json (play order)
-resources/       ball_tuning.tres: tune feel in the inspector
+resources/       ball_tuning.tres (feel), balls/*.tres (ball looks)
 tools/           Level generator, screenshot capture, autopilot trace
 tests/           Headless test runner and tests
 docs/            Design, architecture, level format, build guides
@@ -117,6 +116,6 @@ keeping the screen awake) are handled in project settings and in
 
 ## Licences
 
-Code: choose a licence before publishing (none is set yet). Fonts: Instrument
-Serif and Geist Mono, both SIL Open Font License 1.1 (see `assets/fonts/`).
+Code: choose a licence before publishing (none is set yet). Fonts: Geist and
+Geist Mono, SIL Open Font License 1.1 (see `assets/fonts/`).
 All sounds are synthesised in code; there are no third-party audio assets.

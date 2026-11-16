@@ -21,7 +21,7 @@ func _ready() -> void:
 	layout.add_theme_constant_override("separation", 10)
 	safe.add_child(layout)
 
-	_title = UiStyle.serif("", 170)
+	_title = UiStyle.display("", 132)
 	layout.add_child(_title)
 	layout.add_child(UiStyle.caption("complete", 24))
 	var gap := Control.new()

@@ -41,7 +41,7 @@ func _ready() -> void:
 	chain_gap.custom_minimum_size = Vector2(0, 150)
 	chain_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.add_child(chain_gap)
-	_chain = UiStyle.serif("", 150)
+	_chain = UiStyle.display("", 132)
 	_chain.modulate.a = 0.0
 	layout.add_child(_chain)
 	_perfect = UiStyle.caption("perfect", 22)

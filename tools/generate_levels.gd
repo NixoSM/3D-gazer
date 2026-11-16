@@ -38,19 +38,23 @@ static func _stop(at: float, wall: String, void_color: String, accent: String) -
 func _specs() -> Array[LevelGenerator.Spec]:
 	var specs: Array[LevelGenerator.Spec] = []
 
-	# 1. Blue hour to sunrise: the gentle one.
+	# Palettes: `wall` tints the dark shell (keep it dark and desaturated),
+	# `void` is the colour seen through holes and carries the level's mood,
+	# `accent` lights hole lips, ripples and the lamp.
+
+	# 1. Night into sunrise: the gentle one.
 	var dawn := LevelGenerator.Spec.new()
 	dawn.id = "01_dawn"
 	dawn.display_name = "Dawn"
 	dawn.seed = 1107
-	dawn.base_speed = 10.5
+	dawn.base_speed = 13.65  # 10.5 m/s + 30%
 	dawn.difficulty = 0.35
 	dawn.pattern_weights = {"gate": 4.0, "ring": 2.0, "echo_run": 1.2, "bridge": 0.6}
 	dawn.palette = [
-		_stop(0.00, "#5b6489", "#0d1024", "#f3c98f"),
-		_stop(0.35, "#9a6f93", "#1d1230", "#ffd9a6"),
-		_stop(0.70, "#e5937a", "#331a2c", "#fff0d4"),
-		_stop(1.00, "#f5e5ca", "#26355f", "#e0603f"),
+		_stop(0.00, "#383b47", "#141a3d", "#9fb0ff"),
+		_stop(0.35, "#3d3747", "#2a1746", "#c8a6ff"),
+		_stop(0.70, "#463a3c", "#5a1f2c", "#ff9a85"),
+		_stop(1.00, "#4a4038", "#8a4a1c", "#ffc58a"),
 	]
 	specs.append(dawn)
 
@@ -62,14 +66,14 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	tide.base_speed = 11.5
 	tide.difficulty = 0.6
 	tide.palette = [
-		_stop(0.00, "#d9ece6", "#16324a", "#e8833a"),
-		_stop(0.30, "#86c3b9", "#0f2d3a", "#f5a04e"),
-		_stop(0.65, "#2f7f85", "#061b24", "#ffc27a"),
-		_stop(1.00, "#163f52", "#02080d", "#ffe1a8"),
+		_stop(0.00, "#34403f", "#0b3a3d", "#7ff0e0"),
+		_stop(0.30, "#333e44", "#0b2c45", "#7fd0ff"),
+		_stop(0.65, "#30364a", "#101d4a", "#8fa0ff"),
+		_stop(1.00, "#2b2d3a", "#05081c", "#c9d2ff"),
 	]
 	specs.append(tide)
 
-	# 3. A kiln cooling: fast and tight.
+	# 3. Through the kiln and out into ash: fast and tight.
 	var ember := LevelGenerator.Spec.new()
 	ember.id = "03_ember"
 	ember.display_name = "Ember"
@@ -77,10 +81,10 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	ember.base_speed = 12.5
 	ember.difficulty = 0.85
 	ember.palette = [
-		_stop(0.00, "#3a3233", "#0b0808", "#ffb347"),
-		_stop(0.35, "#83302b", "#160505", "#ffd27a"),
-		_stop(0.70, "#d98a35", "#251004", "#fff1c9"),
-		_stop(1.00, "#eee4d0", "#3b2b22", "#83302b"),
+		_stop(0.00, "#3b3634", "#3a0f08", "#ff8a4c"),
+		_stop(0.35, "#41363a", "#5c1209", "#ff6a3d"),
+		_stop(0.70, "#423a33", "#6e3305", "#ffb54a"),
+		_stop(1.00, "#45423c", "#1a1714", "#f2e9da"),
 	]
 	specs.append(ember)
 	return specs

@@ -6,6 +6,9 @@ extends Node3D
 ## This node's basis is the ball's local frame (X right, Y up from the wall,
 ## Z backwards). Its scale carries the squash; the child mesh carries spin.
 
+## The default look. Swap at runtime with apply_skin().
+@export var skin: BallSkin = preload("res://resources/balls/graphite.tres")
+
 @onready var _mesh: MeshInstance3D = $Mesh
 
 var material: ShaderMaterial
@@ -20,6 +23,18 @@ func _ready() -> void:
 	material = ShaderMaterial.new()
 	material.shader = preload("res://shaders/ball.gdshader")
 	_mesh.material_override = material
+	apply_skin(skin)
+
+
+func apply_skin(new_skin: BallSkin) -> void:
+	skin = new_skin
+	material.set_shader_parameter("base_color", skin.base_color)
+	material.set_shader_parameter("seam_color", skin.seam_color)
+	material.set_shader_parameter("seam_width", skin.seam_width)
+	material.set_shader_parameter("glossiness", skin.glossiness)
+	material.set_shader_parameter("specular", skin.specular)
+	material.set_shader_parameter("reflectivity", skin.reflectivity)
+	material.set_shader_parameter("reflection_tint", skin.reflection_tint)
 
 
 func set_radius(radius: float) -> void:
@@ -27,8 +42,8 @@ func set_radius(radius: float) -> void:
 	var sphere := SphereMesh.new()
 	sphere.radius = radius
 	sphere.height = radius * 2.0
-	sphere.radial_segments = 48
-	sphere.rings = 24
+	sphere.radial_segments = 64
+	sphere.rings = 32
 	_mesh.mesh = sphere
 
 
@@ -77,8 +92,13 @@ func flash(amount: float, color: Color) -> void:
 	material.set_shader_parameter("flash_color", color)
 
 
-func set_colors(environment: Color, ink: Color, fade_amount: float, fade_color: Color) -> void:
-	material.set_shader_parameter("environment_color", environment)
-	material.set_shader_parameter("ink_color", ink)
+## Scene lighting the ball responds to, all in world space.
+func set_lighting(lamp_position: Vector3, lamp_color: Color, up: Vector3, glow: Color, floor_color: Color,
+		fade_amount: float, fade_color: Color) -> void:
+	material.set_shader_parameter("lamp_position", lamp_position)
+	material.set_shader_parameter("lamp_color", lamp_color)
+	material.set_shader_parameter("up_direction", up)
+	material.set_shader_parameter("glow_color", glow)
+	material.set_shader_parameter("floor_color", floor_color)
 	material.set_shader_parameter("fade", fade_amount)
 	material.set_shader_parameter("fade_color", fade_color)
