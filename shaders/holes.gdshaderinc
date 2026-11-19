@@ -1,7 +1,7 @@
-// Shared by the tunnel's inner surface (tunnel.gdshader) and the shell's
-// cut faces (tunnel_shell.gdshader): the holes' signed-distance field.
-// A line-for-line copy of HoleData.signed_distance and
-// LevelData.floor_distance; keep the three in step.
+// The holes' signed-distance field, for the level editor's 2D strip
+// (editor_strip.gdshader). A line-for-line copy of HoleData.signed_distance
+// and LevelData.floor_distance; keep them in step. (The game itself does not
+// use it: TunnelMesher builds real geometry from LevelData.floor_distance.)
 
 // Keep in step with HoleData.CORNER_RADIUS and LevelData.BLEND.
 const float CORNER_RADIUS = 0.6;
@@ -12,16 +12,9 @@ uniform float tunnel_radius = 4.0;
 // Holes: two RGBA float texels per hole, sorted by start:
 //   (s_start, length, angle_center, angle_width), (twist, 0, 0, 0)
 uniform sampler2D hole_data : filter_nearest, repeat_disable;
-// Which holes can touch this chunk of tube (set per chunk). The level
-// editor's 2D strip (canvas_item, no instance uniforms) defines
-// HOLES_PLAIN_UNIFORMS and sets them as ordinary uniforms instead.
-#ifdef HOLES_PLAIN_UNIFORMS
+// Which holes can touch the strip (set by StripView).
 uniform int hole_first = 0;
 uniform int hole_count = 0;
-#else
-instance uniform int hole_first = 0;
-instance uniform int hole_count = 0;
-#endif
 
 float wrap_angle(float a) {
 	return mod(a + PI, TAU) - PI;
@@ -62,19 +55,4 @@ float floor_distance(float s, float angle) {
 		d = smooth_min(d, hole_distance(a, twist, s, angle));
 	}
 	return d;
-}
-
-// The floor's rounded tiles (a running bond), shared so the cut faces can
-// continue the tiles' seams: signed distance to the tile's edge (< 0 in a
-// seam), plus which tile it is (x = row, y = column).
-float tile_box(float u, float v, float band_length, out vec2 tile) {
-	float tiles_around = 10.0;
-	float tile_v = TAU * tunnel_radius / tiles_around;
-	float tile_u = band_length * 1.3;
-	float row = floor(u / tile_u);
-	float shifted = v + mod(row, 2.0) * tile_v * 0.5;
-	tile = vec2(row, floor(shifted / tile_v));
-	vec2 cell = vec2(mod(u, tile_u) - tile_u * 0.5, mod(shifted, tile_v) - tile_v * 0.5);
-	vec2 q = abs(cell) - vec2(tile_u, tile_v) * 0.5 + 0.09 + 0.35;
-	return -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.35);
 }

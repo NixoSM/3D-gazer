@@ -44,8 +44,14 @@ Each level can make the tunnel **spin**: a steady sideways drift that
 carries the ball around the tunnel unless the player leans against it.
 Because the camera's roll is locked to the ball, the player sees the whole
 tunnel turning. Spin is level data (`spin` keys in degrees per second along
-the tunnel), so the future editor can paint it: two keys close together
-snap it round, two far apart ease it in. In the simulation, rolling
+the tunnel), painted in the editor's Spin panel as a direction, a starting
+rate and how much it grows.
+
+**Within a level the spin turns one way only and only ever speeds up**
+(Nicola, November 2026): Dawn 8 then 12 °/s late on, Tide 15 rising to
+30 °/s, Ember 25 rising to 50 °/s, all the same way. The player learns
+which way to lean and has to lean harder; an earlier version reversed it
+mid-level, which read as a trick rather than a challenge. In the simulation, rolling
 resistance relaxes the ball's sideways speed towards the spin drift
 instead of towards zero, and the air inside the tunnel turns with it.
 
@@ -79,7 +85,7 @@ thin dashed ring on the wall marks your best distance.
 Forward speed grows linearly with progress: `v = base · (1 + 0.2 · s/L)`.
 Because speed depends on position, the run time is
 `T = L / (0.2 · base) · ln(1.2)`, and levels are sized so that `T = 60 s`
-(see `SpeedProfile`). Base speeds: Dawn 13.65 m/s, Tide 17.5, Ember 21.
+(see `SpeedProfile`). Base speeds: Dawn 20 m/s, Tide 23.2, Ember 27.
 
 Numbers alone did not make the faster levels *feel* faster on a phone, so
 speed drives the presentation too:
@@ -162,25 +168,25 @@ Old Flash-game cartoon: flat, bright, high-contrast colour, hard shading and
 thick black outlines. No textures, no realistic lighting, no glow.
 
 - **Tunnel**: one flat colour at a time, taken from the level palette by
-  progress, with a two-tone floor pattern (default: big rounded tiles in a
-  running bond; stripes, diamonds, plain and the old rings are the other
-  choices, `TunnelView.pattern`). The pattern is fixed to the wall. The half of the tunnel opposite the ball is a flat darker
-  tone (cel shading), which keeps "down" obvious as the world turns.
-  Distance fades smoothly into the void colour along the tunnel.
+  progress, with big rounded tiles in a running bond, fixed to the wall.
+  The half of the tunnel opposite the ball is a flat darker tone (cel
+  shading), which keeps "down" obvious as the world turns. Distance fades
+  smoothly into the void colour along the tunnel.
 - **Holes**: show a flat, strongly contrasting void colour with a few
   blinking cartoon stars. Every edge of floor gets a thick black outline,
-  like a cut-out cartoon platform. Through a hole you see the cut faces of the shell (0.8 m
-  thick), in a darker tone of the wall with a black line at the back, so
-  every platform reads as a solid slab. The floor tiles' seams carry on
-  down the faces, so each tile reads as a block (`TunnelView.face_style`
-  also offers plain, layered, and blocks with layers). Corners are rounded and diagonal edges are straight, because
-  holes are drawn from a distance field, not from grid geometry. A platform
+  like a cut-out cartoon platform, drawn like an ink line: a quarter metre
+  of floor, but never thicker than about 1% of the screen (close to the
+  camera it would be a black wedge) and never thinner than 1.5 pixels.
+  Through a hole you see the cut faces of the shell (0.8 m thick), in a
+  darker tone of the wall with the tile seams carried down them and a black
+  line at the back, so every tile reads as a solid block. Corners are
+  rounded and diagonal edges are straight: the holes are cut into the
+  geometry from the same distance field the ball falls by. A platform
   floating in the void is just the platform: no rims or circles around it.
-- **Edges**: 4× MSAA on geometry; the hole edges are antialiased in the
-  shader from the distance field, and the outline never gets thinner than
-  two pixels, so far edges stay clean. Patterns fade out with distance
-  before they shimmer. Tunnel chunks overlap by 0.3 m so their seams never
-  open hairline cracks onto the void.
+- **Edges**: every edge is a real triangle edge, smoothed by 4× MSAA.
+  Patterns fade out with distance before they shimmer. The tunnel is
+  watertight by construction and checked pixel by pixel against a ray-cast
+  of the level (see ARCHITECTURE.md, "Checking the picture").
 - **Ball** (default skin "Classic"): a white ball with a wide coloured
   stripe, like a striped pool ball, so rolling reads in every direction,
   with one hard shadow step, a solid white shine spot and a thick black

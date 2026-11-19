@@ -2,130 +2,128 @@ class_name TunnelView
 extends Node3D
 ## Streams tunnel chunks around the camera and feeds the tunnel shaders.
 ##
-## Each chunk is two tubes: the inner surface (tunnel.gdshader, floor and
-## holes) and, just outside it, the shell's outer surface
-## (tunnel_shell.gdshader), which draws the cut faces seen through holes
-## and so gives the shell its thickness.
-##
-## Only the stretch near the camera exists as geometry: chunks are built
-## ahead of the player and freed behind, so level length has no effect on
-## memory or draw cost.
+## A chunk is one mesh built by TunnelMesher: the floor with its holes cut
+## out (tunnel_floor.gdshader) and the shell's cut faces (tunnel_wall.gdshader).
+## Only the stretch near the camera exists: chunks are built ahead of the
+## player on worker threads and freed behind, so level length has no effect
+## on memory or draw cost. The first chunks of the level are kept, so a
+## retry (which jumps back to the start) never waits for geometry.
 
 const CHUNK_LENGTH := 18.0
 const BEHIND := 1
-## How far ahead geometry exists. Keep above the shader's fog distance.
+## How far ahead geometry exists. Keep above the shaders' fog distance.
 const VIEW_DISTANCE := 150.0
-const MAX_BUILDS_PER_FRAME := 2
+## Chunks this close to the camera are built on the spot if no worker has
+## delivered them yet (the camera must never see a missing chunk).
+const MUST_HAVE := 2
+const MAX_WORKERS := 3
+## Chunks up to this index stay built for the whole level (fast retries).
+const KEEP_FIRST := 9
 const MAX_RIPPLES := 6
 
 var level: LevelData
 var palette: LevelPalette
-var material: ShaderMaterial
-var shell_material: ShaderMaterial
-## Thickness (m) the cut faces are drawn with. Defaults to the shell the
-## simulation uses; changing it rebuilds the chunks (for look tests).
-var shell_thickness := TunnelMath.WALL_THICKNESS:
-	set(value):
-		shell_thickness = value
-		if shell_material:
-			shell_material.set_shader_parameter("shell_thickness", value)
-		_clear_chunks()
+var floor_material: ShaderMaterial
+var wall_material: ShaderMaterial
 
-## Floor look (see tunnel.gdshader `pattern`): 0 bands, 1 tiles, 2 stripes, 3 diamonds, 4 plain.
-var pattern := 1:
-	set(value):
-		pattern = value
-		if material:
-			material.set_shader_parameter("pattern", value)
-
-## Texture of the cut faces (tunnel_shell.gdshader `face_style`).
-var face_style := 1:
-	set(value):
-		face_style = value
-		if shell_material:
-			shell_material.set_shader_parameter("face_style", value)
-
-var _chunks := {}  # chunk index -> MeshInstance3D
+var _chunks := {}    # chunk index -> MeshInstance3D (in the tree)
+var _kept := {}      # chunk index -> ArrayMesh, the start of the level
+var _tasks := {}     # chunk index -> WorkerThreadPool task id
+var _results := {}   # chunk index -> TunnelMesher.Geometry (filled by workers)
+var _mutex := Mutex.new()
+## Bumped on every level change, so late results for an old level are dropped.
+var _generation := 0
 var _ripples: Array[Vector4] = []
 var _next_ripple := 0
 
 
 func _ready() -> void:
-	material = ShaderMaterial.new()
-	material.shader = preload("res://shaders/tunnel.gdshader")
-	# The floor draws before the shell, so the depth test can skip shell
-	# pixels hidden behind floor before their (costly) shader runs.
-	material.render_priority = 1
-	shell_material = ShaderMaterial.new()
-	shell_material.shader = preload("res://shaders/tunnel_shell.gdshader")
-	shell_material.set_shader_parameter("shell_thickness", shell_thickness)
+	floor_material = ShaderMaterial.new()
+	floor_material.shader = preload("res://shaders/tunnel_floor.gdshader")
+	floor_material.set_shader_parameter("outline_width", TunnelMesher.OUTLINE_WIDTH)
+	floor_material.set_shader_parameter("outline_max_width", TunnelMesher.OUTLINE_MAX_WIDTH)
+	wall_material = ShaderMaterial.new()
+	wall_material.shader = preload("res://shaders/tunnel_wall.gdshader")
 	_ripples.resize(MAX_RIPPLES)
 
 
+func _exit_tree() -> void:
+	_wait_for_workers()
+
+
 func set_level(p_level: LevelData, p_palette: LevelPalette, tuning: BallTuning) -> void:
+	_wait_for_workers()
+	_generation += 1
 	level = p_level
 	palette = p_palette
+	# Warm LevelData's lazy cache here, before worker threads read it.
+	level.first_hole_index_near(0.0)
 	_clear_chunks()
+	_kept.clear()
 	clear_ripples()
 	_set_both("wall_gradient", palette.wall_texture)
-	material.set_shader_parameter("accent_gradient", palette.accent_texture)
+	floor_material.set_shader_parameter("accent_gradient", palette.accent_texture)
 	_set_both("level_length", level.length)
 	_set_both("tunnel_radius", level.tunnel_radius)
-	material.set_shader_parameter("ball_radius", tuning.ball_radius)
 	_set_both("band_length", band_length_for(level))
-	_set_both("hole_data", hole_texture(level))
-	material.set_shader_parameter("pattern", pattern)
+	floor_material.set_shader_parameter("ball_radius", tuning.ball_radius)
 
 
-## The level's holes packed for the shader: two RGBA float texels each,
-## (s_start, length, angle_center, angle_width) and (twist, 0, 0, 0).
-static func hole_texture(level: LevelData) -> ImageTexture:
-	var count := maxi(level.holes.size(), 1)
-	var data := PackedFloat32Array()
-	data.resize(count * 8)
-	for i in level.holes.size():
-		var hole := level.holes[i]
-		data[i * 8 + 0] = hole.s_start
-		data[i * 8 + 1] = hole.length
-		data[i * 8 + 2] = hole.angle_center
-		data[i * 8 + 3] = hole.angle_width
-		data[i * 8 + 4] = hole.twist
-	var image := Image.create_from_data(count * 2, 1, false, Image.FORMAT_RGBAF, data.to_byte_array())
-	return ImageTexture.create_from_image(image)
+## Faster levels get shorter tiles, so the floor streams past noticeably
+## quicker than the speed difference alone would suggest.
+static func band_length_for(p_level: LevelData) -> float:
+	return clampf(3.0 - (p_level.base_speed - 13.65) * 0.14, 1.8, 3.0)
 
 
-## Faster levels get shorter light/dark bands, so the rings flicker past
-## noticeably quicker than the speed difference alone would suggest.
-static func band_length_for(level: LevelData) -> float:
-	return clampf(3.0 - (level.base_speed - 13.65) * 0.14, 1.8, 3.0)
+## Range of chunk indices that should exist for a camera at `camera_s`.
+static func wanted_range(camera_s: float) -> Vector2i:
+	var first := int(floor(camera_s / CHUNK_LENGTH)) - BEHIND
+	var last := int(floor((camera_s + VIEW_DISTANCE) / CHUNK_LENGTH))
+	return Vector2i(first, last)
 
 
 ## Call every frame with the camera's distance along the tunnel.
 func update_view(camera_s: float, ball_s: float, ball_angle: float, ball_height: float, now: float) -> void:
 	if level == null:
 		return
-	var first := int(floor(camera_s / CHUNK_LENGTH)) - BEHIND
-	var last := int(floor((camera_s + VIEW_DISTANCE) / CHUNK_LENGTH))
+	var wanted := wanted_range(camera_s)
 	for index in _chunks.keys():
-		if index < first or index > last:
+		if index < wanted.x or index > wanted.y:
 			_chunks[index].queue_free()
 			_chunks.erase(index)
-	var built := 0
-	for index in range(first, last + 1):
+	_collect_results()
+	for index in range(wanted.x, wanted.y + 1):
 		if _chunks.has(index):
 			continue
-		# Always build what is close; spread far chunks over several frames.
-		if built >= MAX_BUILDS_PER_FRAME and index > first + 3:
-			break
-		_build_chunk(index)
-		built += 1
+		if _kept.has(index):
+			_add_chunk(index, _kept[index])
+		elif index <= wanted.x + BEHIND + MUST_HAVE:
+			_add_chunk(index, _build_now(index))
+		elif not _tasks.has(index) and _tasks.size() < MAX_WORKERS:
+			_dispatch(index)
 
-	material.set_shader_parameter("ball", Vector3(ball_s, ball_angle, ball_height))
-	material.set_shader_parameter("now", now)
+	floor_material.set_shader_parameter("ball", Vector3(ball_s, ball_angle, ball_height))
+	floor_material.set_shader_parameter("now", now)
+
+
+## Builds every chunk the camera could see right now, synchronously (tools
+## and tests that capture a single frame). Returns the chunk range.
+func build_visible_now(camera_s: float) -> Vector2i:
+	_wait_for_workers()
+	_collect_results()
+	var wanted := wanted_range(camera_s)
+	for index in _chunks.keys():
+		if index < wanted.x or index > wanted.y:
+			_chunks[index].queue_free()
+			_chunks.erase(index)
+	for index in range(wanted.x, wanted.y + 1):
+		if not _chunks.has(index):
+			_add_chunk(index, _kept[index] if _kept.has(index) else _build_now(index))
+	return wanted
 
 
 func set_best_marker(s: float) -> void:
-	material.set_shader_parameter("best_s", s)
+	floor_material.set_shader_parameter("best_s", s)
 
 
 func set_fog(color: Color) -> void:
@@ -137,48 +135,96 @@ func set_fade(amount: float, color: Color) -> void:
 	_set_both("fade_color", color)
 
 
+## Starts a ripple at a point on the wall. strength ~0.3 (soft) .. 1.5 (huge).
+func add_ripple(s: float, angle: float, now: float, strength: float) -> void:
+	_ripples[_next_ripple] = Vector4(s, angle, now, strength)
+	_next_ripple = (_next_ripple + 1) % MAX_RIPPLES
+	floor_material.set_shader_parameter("ripples", _ripples)
+
+
+func clear_ripples() -> void:
+	for i in MAX_RIPPLES:
+		_ripples[i] = Vector4.ZERO
+	floor_material.set_shader_parameter("ripples", _ripples)
+
+
+## Triangles currently in the scene (performance budget tests).
+func triangle_count() -> int:
+	var total := 0
+	for index in _chunks:
+		var mesh: ArrayMesh = _chunks[index].mesh
+		for surface in mesh.get_surface_count():
+			total += mesh.surface_get_array_index_len(surface) / 3
+	return total
+
+
 func _set_both(parameter: String, value: Variant) -> void:
-	material.set_shader_parameter(parameter, value)
-	shell_material.set_shader_parameter(parameter, value)
+	floor_material.set_shader_parameter(parameter, value)
+	wall_material.set_shader_parameter(parameter, value)
 
 
 func _clear_chunks() -> void:
 	for index in _chunks.keys():
 		_chunks[index].queue_free()
 	_chunks.clear()
+	_mutex.lock()
+	_results.clear()
+	_mutex.unlock()
 
 
-## Starts a ripple at a point on the wall. strength ~0.3 (soft) .. 1.5 (huge).
-func add_ripple(s: float, angle: float, now: float, strength: float) -> void:
-	_ripples[_next_ripple] = Vector4(s, angle, now, strength)
-	_next_ripple = (_next_ripple + 1) % MAX_RIPPLES
-	material.set_shader_parameter("ripples", _ripples)
+func _chunk_span(index: int) -> Vector2:
+	return Vector2(index * CHUNK_LENGTH, (index + 1) * CHUNK_LENGTH)
 
 
-func clear_ripples() -> void:
-	for i in MAX_RIPPLES:
-		_ripples[i] = Vector4.ZERO
-	material.set_shader_parameter("ripples", _ripples)
+func _build_now(index: int) -> ArrayMesh:
+	var span := _chunk_span(index)
+	var mesh := TunnelMesher.to_mesh(TunnelMesher.build(level, span.x, span.y), floor_material, wall_material)
+	if index <= KEEP_FIRST:
+		_kept[index] = mesh
+	return mesh
 
 
-func _build_chunk(index: int) -> void:
-	var start := index * CHUNK_LENGTH
-	var end := (index + 1) * CHUNK_LENGTH
-	var holes := TunnelMeshBuilder.hole_range(level, start, end)
-	var instance := _tube("Chunk%d" % index, TunnelMeshBuilder.build_chunk(level, start, end), material, holes)
+func _add_chunk(index: int, mesh: ArrayMesh) -> void:
+	var instance := MeshInstance3D.new()
+	instance.name = "Chunk%d" % index
+	instance.mesh = mesh
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
-	if shell_thickness > 0.0:
-		var shell := _tube("Shell", TunnelMeshBuilder.build_chunk(level, start, end, shell_thickness), shell_material, holes)
-		instance.add_child(shell)
 	_chunks[index] = instance
 
 
-static func _tube(tube_name: String, mesh: ArrayMesh, tube_material: ShaderMaterial, holes: Vector2i) -> MeshInstance3D:
-	var instance := MeshInstance3D.new()
-	instance.name = tube_name
-	instance.mesh = mesh
-	instance.material_override = tube_material
-	instance.set_instance_shader_parameter("hole_first", holes.x)
-	instance.set_instance_shader_parameter("hole_count", holes.y)
-	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return instance
+func _dispatch(index: int) -> void:
+	var span := _chunk_span(index)
+	var generation := _generation
+	var built_level := level
+	_tasks[index] = WorkerThreadPool.add_task(func() -> void:
+		var geometry := TunnelMesher.build(built_level, span.x, span.y)
+		_mutex.lock()
+		if generation == _generation:
+			_results[index] = geometry
+		_mutex.unlock(), false, "Tunnel chunk %d" % index)
+
+
+## Turns finished worker results into chunks (meshes are made on the main thread).
+func _collect_results() -> void:
+	for index in _tasks.keys():
+		var task: int = _tasks[index]
+		if WorkerThreadPool.is_task_completed(task):
+			WorkerThreadPool.wait_for_task_completion(task)
+			_tasks.erase(index)
+	_mutex.lock()
+	var ready := _results.duplicate()
+	_results.clear()
+	_mutex.unlock()
+	for index in ready:
+		var mesh := TunnelMesher.to_mesh(ready[index], floor_material, wall_material)
+		if index <= KEEP_FIRST:
+			_kept[index] = mesh
+		if not _chunks.has(index):
+			_add_chunk(index, mesh)
+
+
+func _wait_for_workers() -> void:
+	for index in _tasks:
+		WorkerThreadPool.wait_for_task_completion(_tasks[index])
+	_tasks.clear()

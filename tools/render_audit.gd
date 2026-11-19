@@ -54,18 +54,6 @@ func _run() -> void:
 			await _shot("L3_twist_%d" % twisted)
 			twisted += 1
 
-	# The floor looks to choose from, on the same Tide view.
-	_main._play_level(1)
-	await _frames(3)
-	session.stop_run()
-	var spot := _first_hole(session.level, false)
-	for pattern in 5:
-		world.tunnel.pattern = pattern
-		_place(session, world, spot.s_start - 7.0, spot.angle_center + PI + 0.3)
-		await _frames(12)
-		await _shot("pattern_%d" % pattern)
-	world.tunnel.pattern = 1
-
 	# The fall: roll straight into the first ring of level 1, frame by frame.
 	_main._play_level(0)
 	await _frames(3)

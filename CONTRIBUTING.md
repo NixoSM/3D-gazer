@@ -7,6 +7,10 @@
 3. Run the tests: `godot --headless --script res://tests/run_tests.gd`.
 4. If you changed anything visual, render reference shots and look at them:
    `godot res://tools/capture_screens.tscn -- /tmp/shots` (needs a GPU or `xvfb-run`).
+   If you touched the tunnel's geometry or shaders, run the pixel oracle
+   too (docs/ARCHITECTURE.md, "Checking the picture"): looking is not
+   enough, a one-pixel pinhole flickers on the phone and is invisible in
+   a screenshot.
 5. Open a pull request describing *why*, with before/after shots for visual changes.
 
 CI runs the tests on every pull request (`.github/workflows/tests.yml`).

@@ -94,27 +94,48 @@ func first_hole_index_near(s: float) -> int:
 
 ## How far (m) apart two holes may be and still blend into one opening.
 ## Holes closer than this merge smoothly: no seam or rim between holes that
-## touch, and no sharp floor corners where they meet. Shared with the shader.
+## touch, and no sharp floor corners where they meet.
 const BLEND := 1.2
+## Holes further than this along the tunnel cannot change floor_distance()
+## anywhere it matters (near an edge).
+const REACH := BLEND + HoleData.CORNER_RADIUS + 1.0
 
 
 ## Signed distance (m, on the wall) from the surface point to the nearest
 ## hole edge: positive on solid floor, negative over open void.
 ##
-## The union of all holes, smoothly blended (polynomial smooth-min, BLEND):
-## the simulation and the renderer (tunnel.gdshader) compute exactly this,
-## so the edge you see is the edge you fall from.
+## The union of all holes, smoothly blended (polynomial smooth-min, BLEND).
+## This is the one definition of "where the floor is": the simulation falls
+## by it, and TunnelMesher builds the visible floor and the cut faces from
+## it, so the edge you see is the edge you fall from.
 func floor_distance(s: float, angle: float) -> float:
-	var reach := BLEND + HoleData.CORNER_RADIUS + 1.0
-	var index := first_hole_index_near(s - reach)
+	return floor_distance_in(holes, first_hole_index_near(s - REACH), s, angle)
+
+
+## floor_distance() over a slice of holes (sorted by start) beginning at
+## `start`. With holes_window() it gives bit-for-bit the same answer as
+## floor_distance() for every s in the window, without the lookup: the
+## tunnel mesher evaluates thousands of points per chunk this way.
+func floor_distance_in(list: Array[HoleData], start: int, s: float, angle: float) -> float:
 	var distance := INF
-	while index < holes.size() and holes[index].s_start <= s + reach:
-		var hole := holes[index]
+	var index := start
+	while index < list.size() and list[index].s_start <= s + REACH:
+		var hole := list[index]
 		index += 1
-		if hole.s_end() < s - reach:
+		if hole.s_end() < s - REACH:
 			continue
 		distance = smooth_min(distance, hole.signed_distance(s, angle, tunnel_radius))
 	return distance
+
+
+## Every hole that can affect floor_distance() for some s in [s0, s1], in order.
+func holes_window(s0: float, s1: float) -> Array[HoleData]:
+	var result: Array[HoleData] = []
+	var index := first_hole_index_near(s0 - REACH)
+	while index < holes.size() and holes[index].s_start <= s1 + REACH:
+		result.append(holes[index])
+		index += 1
+	return result
 
 
 ## Polynomial smooth minimum: like min(a, b), but within BLEND of each other

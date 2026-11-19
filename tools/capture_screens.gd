@@ -49,7 +49,6 @@ func _run() -> void:
 	await _frames(10)
 	world.tunnel.add_ripple(level.length * 0.45, deg_to_rad(30.0), world.now(), 1.2)
 	world.ball.flash(0.8, world.palette.accent_at(0.45))
-	_main.hud.show_chain(4, true, world.palette.accent_at(0.45))
 	await _frames(14)
 	await _shot("07_echo_ripple")
 	await _frames(16)

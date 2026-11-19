@@ -1,5 +1,7 @@
 # Gazer
 
+<img src="assets/icon/icon_180.png" width="112" align="right" alt="The Gazer icon: the tunnel seen head-on as an eye, with the ball as its catch-light">
+
 
 You are a striped cartoon ball rolling down a bright, flat-coloured tunnel. Tilt the phone and the
 ball rolls across the wall as if you had tilted the floor; the camera turns
@@ -13,14 +15,17 @@ to change the height), and it wipes the ball's sideways momentum, so
 whatever you tilt during the freeze is where it goes.
 
 The tunnel also **spins**, gently late in the first level and hard on the
-others, carrying the ball sideways: lean against it. Spin is set per
-level, like speed, and is the main difficulty dial. Each level is about a
-minute long and faster than the last (13.65, 17.5 and 21 m/s at the
+others, carrying the ball sideways: lean against it. Within a level it
+always turns the same way and only ever speeds up. Spin is set per level,
+like speed, and is the main difficulty dial. Each level is about a
+minute long and faster than the last (20, 23.2 and 27 m/s at the
 start). The ball speeds up by 20% from start to finish, and the tunnel's colour moves through a palette (sunrise yellows to
 violet, sea greens to deep blue, lava yellow to red), so the colour around
 you tells you how far you are and the colour ahead shows what is coming.
 The look is a deliberate throwback to Flash games: flat colours, hard
-shading, thick black outlines.
+shading, thick black outlines. The holes are cut into real geometry from
+the same shape the ball falls by, and every picture is checked pixel by
+pixel against a ray-cast of the level (see [Checking the picture](#checking-the-picture)).
 
 ![Screenshots](docs/media/screens.jpg)
 
@@ -31,14 +36,15 @@ shading, thick black outlines.
 | Engine | Godot 4.5.1 (GDScript), Mobile renderer |
 | Platforms | iOS first. Android is an export preset away (see [docs/ANDROID.md](docs/ANDROID.md)) |
 | Levels in the game | Dawn, Tide, Ember (`levels/manifest.json`) |
-| Levels in the folder only | `new_level` (30 m/s, about 45 s): not in the manifest yet, see [Adding a level](#adding-a-level) |
+| Levels in the folder only | `custom_level_test` (30 m/s, about 42 s): not in the manifest yet, the bots cannot finish it, see [Adding a level](#adding-a-level) |
 | Level editor | Desktop app for Windows and macOS, built from this same project |
-| Tests | Headless suite, including a bot that finishes every level with a human reaction delay |
+| Tests | Headless suite, including a bot that finishes every level with a human reaction delay, and a pixel oracle for the renderer |
 
 **What has been verified and what hasn't.** Code is written and tested on
 Linux: the unit tests, the level validator and the bots that play every
 level all pass there, and screenshots and videos are rendered by the real
-game with a software GPU. Feel can only be judged on a phone. The game has
+game on the iPhone's renderer (Godot's Mobile renderer, on a software
+Vulkan driver), then checked by the pixel oracle. Feel can only be judged on a phone. The game has
 been played on an iPhone through the CI build below; the tilt, spin and
 echo tuning are still being adjusted from that. The level editor has been
 built by CI but not yet tried on a real Windows PC or Mac.
@@ -86,11 +92,6 @@ these steps exist.
 it edits the repository's own `levels/` folder; the downloaded app uses a
 **Gazer Levels** folder in Documents instead.
 
-> **Waiting on PR #5.** On `main` today, the inspector's **Spin** fields
-> can snap back and not apply, and the bots can cut across holes when
-> lining up after a ring (so they fail `new_level`). PR #5 fixes both. The
-> descriptions here and in the editor guide assume it is merged.
-
 ## Adding a level
 
 A level is one `.json` file in `levels/` (format:
@@ -111,10 +112,9 @@ Once the tests pass and it is merged, the next iOS build has it.
 
 Two traps:
 
-- `tools/generate_levels.gd` rewrites `01_dawn`, `02_tide`, `03_ember`
-  **and `manifest.json`** with only the generated levels. After running it,
-  add hand-made levels back to the manifest, and save hand edits to the
-  bundled three under a new id.
+- `tools/generate_levels.gd` rewrites `01_dawn`, `02_tide` and `03_ember`
+  (it keeps every other level in the manifest). Save hand edits to the
+  bundled three under a new id, or they are lost the next time it runs.
 - Do not rename a shipped level's id: progress is saved by id.
 
 ## Developing
@@ -145,8 +145,34 @@ Useful tools, all run from the repository root:
 | `godot --headless --script res://tools/trace_autopilot.gd -- 02_tide 0.2` | Bot plays a level with a reaction delay and prints where and why it struggles |
 | `godot --headless --script res://tools/generate_levels.gd [--verbose]` | Regenerates the three bundled levels (see the trap above) |
 | `godot --headless --script res://tools/idle_report.gd` | How much of each level is plain scrolling |
-| `xvfb-run godot --rendering-driver opengl3 --resolution 1170x2532 res://tools/capture_screens.tscn -- <dir>` | Reference screenshots (add `--fixed-fps 60` for `render_audit.tscn` close-ups) |
-| `xvfb-run godot --rendering-driver opengl3 res://tools/perf_probe.tscn` | Rough shader cost per view |
+| `xvfb-run -a godot $MOBILE --resolution 1170x2532 res://tools/capture_screens.tscn -- <dir>` | Reference screenshots (`render_audit.tscn` for close-ups) |
+| `xvfb-run -a godot $MOBILE --resolution 585x1266 res://tools/visual_audit.tscn -- <dir>` then `python3 tools/visual_oracle.py <dir>` | The pixel oracle (below) |
+| `xvfb-run -a godot $MOBILE res://tools/perf_probe.tscn` | Frame time, triangles and draw calls per view |
+| `python3 tools/make_icon.py` then `godot --headless --script res://tools/rasterize_icon.gd` | Redraws the app icon (`icon.svg`, `assets/icon/`) |
+
+`$MOBILE` is `--rendering-driver vulkan --rendering-method mobile`, the
+renderer the iPhone uses; without a GPU, Mesa's lavapipe driver runs it.
+
+### Checking the picture
+
+Rendering bugs used to come back after being fixed, because the only check
+was looking at screenshots. Now there are two automated ones:
+
+- `tests/test_tunnel_mesher.gd` (part of the test suite) checks the
+  tunnel's geometry against the level definition: the floor covers exactly
+  the solid wall, it is watertight across cells and chunks, every hole edge
+  has a cut face, the outline is drawn from true edge distances, a chunk
+  stays within its triangle budget.
+- The **pixel oracle** renders about 200 views of the three levels (around
+  every kind of hole, and along a bot's run) with each material drawn as a
+  flat ID colour, then ray-casts the same views from the level file alone
+  and compares every pixel. It shares no code with the renderer. It fails
+  on any group of wrong pixels, on any single pinhole of void and on any
+  stray ink (faint outline away from every edge), with and without MSAA,
+  and writes side-by-side images of what was drawn and what should have
+  been. The first version of the new tunnel had 140 one-pixel pinholes
+  that no screenshot showed, then thin black lines between hole corners
+  that the first oracle missed; it finds both now, and both fixes are in.
 
 ### Repository layout
 
@@ -165,16 +191,16 @@ src/
     speed_profile.gd, tunnel_math.gd               shared maths
   input/         Touch, accelerometer, keyboard -> InputFrame
   gameplay/      GameSession (runs a level), Autopilot (the bot)
-  presentation/  Tunnel mesh and baked hole field, camera, ball, effects, sound
+  presentation/  Tunnel mesher and streaming, camera, ball, effects, sound
   ui/            Menu, HUD, pause, results (built in code, see ui_style.gd)
   app/           Main state machine, settings and progress autoloads
   platform/      The only code that touches platform APIs (haptics, screen)
   editor/        The desktop level editor
-shaders/         Tunnel, ball, sky and editor-strip shaders (holes.gdshaderinc is shared)
+shaders/         Tunnel floor, cut faces, void backdrop, ball, editor strip (holes.gdshaderinc: the editor's copy of the hole field)
 levels/          Level JSON files + manifest.json (play order)
 resources/       ball_tuning.tres (feel), balls/*.tres (ball looks)
-assets/          Font (Lilita One)
-tools/           Level generator, bot trace, screenshot and perf tools
+assets/          Font (Lilita One), app icon PNGs (drawn by tools/make_icon.py)
+tools/           Level generator, bot trace, screenshot, pixel oracle, perf and icon tools
 tests/           Headless test runner and tests (tests/test_*.gd are found automatically)
 docs/            Design, architecture, level format, editor and build guides
 .github/workflows/

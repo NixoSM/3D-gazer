@@ -119,7 +119,7 @@ func level_changed() -> void:
 	_void_texture.gradient = _palette.void_color
 	_void_texture.width = 256
 	var material := _strip.material as ShaderMaterial
-	material.set_shader_parameter("hole_data", TunnelView.hole_texture(lv))
+	material.set_shader_parameter("hole_data", hole_texture(lv))
 	material.set_shader_parameter("wall_gradient", _palette.wall_texture)
 	material.set_shader_parameter("void_gradient", _void_texture)
 	material.set_shader_parameter("level_length", lv.length)
@@ -1139,3 +1139,21 @@ func _pill(p: Vector2, text: String, fill: Color, on_overlay: bool = true) -> vo
 	style.set_corner_radius_all(11)
 	canvas.draw_style_box(style, rect)
 	canvas.draw_string(_font, rect.position + Vector2(7.0, 16.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, EditorTheme.INK)
+
+
+## The level's holes packed for editor_strip.gdshader (holes.gdshaderinc):
+## two RGBA float texels each, (s_start, length, angle_center, angle_width)
+## and (twist, 0, 0, 0).
+static func hole_texture(lv: LevelData) -> ImageTexture:
+	var count := maxi(lv.holes.size(), 1)
+	var data := PackedFloat32Array()
+	data.resize(count * 8)
+	for i in lv.holes.size():
+		var hole := lv.holes[i]
+		data[i * 8 + 0] = hole.s_start
+		data[i * 8 + 1] = hole.length
+		data[i * 8 + 2] = hole.angle_center
+		data[i * 8 + 3] = hole.angle_width
+		data[i * 8 + 4] = hole.twist
+	var image := Image.create_from_data(count * 2, 1, false, Image.FORMAT_RGBAF, data.to_byte_array())
+	return ImageTexture.create_from_image(image)
