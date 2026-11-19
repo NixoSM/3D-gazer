@@ -2,10 +2,12 @@ extends SceneTree
 ## Regenerates the bundled levels in res://levels/ from their specs.
 ##
 ## Usage (from the repository root):
-##   godot --headless --script res://tools/generate_levels.gd
+##   godot --headless --script res://tools/generate_levels.gd [-- --out <dir>] [--verbose]
 ##
 ## Generated files are committed. Re-run after changing LevelGenerator or a
 ## spec below, then play-test: changing a seed changes the whole layout.
+## The manifest keeps any level it already lists that is not generated here
+## (levels made in the editor), in its place.
 
 const OUTPUT_DIR := "res://levels/"
 
@@ -13,11 +15,16 @@ const OUTPUT_DIR := "res://levels/"
 func _init() -> void:
 	var tuning: BallTuning = load("res://resources/ball_tuning.tres")
 	var generator := LevelGenerator.new()
-	generator.verbose = "--verbose" in OS.get_cmdline_user_args()
-	var manifest := []
+	var args := OS.get_cmdline_user_args()
+	generator.verbose = "--verbose" in args
+	var out_dir := OUTPUT_DIR
+	if "--out" in args and args.find("--out") + 1 < args.size():
+		out_dir = args[args.find("--out") + 1].trim_suffix("/") + "/"
+		DirAccess.make_dir_recursive_absolute(out_dir)
+	var generated := []
 	for spec in _specs():
 		var level := generator.generate(spec, tuning)
-		var path := OUTPUT_DIR + level.id + ".json"
+		var path := out_dir + level.id + ".json"
 		var error := LevelSerializer.save_file(level, path)
 		if error != OK:
 			push_error("Could not write %s (%s)" % [path, error_string(error)])
@@ -27,10 +34,31 @@ func _init() -> void:
 		var unused := "" if generator.script_end == INF else "  (script ran out at %.0f%%)" % (100.0 * generator.script_end / level.length)
 		print("%s  %d holes  %d spin keys  %.0f m  %.1f s  %d/%d sections%s%s" % [path, level.holes.size(), level.spin.size(), level.length,
 			level.duration(), generator.sections_used, spec.sections.size(), unused, "" if problems.is_empty() else "  WARN " + "; ".join(problems)])
-		manifest.append(level.id)
-	var file := FileAccess.open(OUTPUT_DIR + "manifest.json", FileAccess.WRITE)
+		generated.append(level.id)
+	var manifest := _merged_manifest(out_dir, generated)
+	var file := FileAccess.open(out_dir + "manifest.json", FileAccess.WRITE)
 	file.store_string(JSON.stringify({"levels": manifest}, "  ") + "\n")
 	quit(0)
+
+
+## The generated ids in order, with every other level the manifest already
+## listed kept after the generated one it followed.
+static func _merged_manifest(out_dir: String, generated: Array) -> Array:
+	var existing: Array = []
+	if FileAccess.file_exists(out_dir + "manifest.json"):
+		var data = JSON.parse_string(FileAccess.get_file_as_string(out_dir + "manifest.json"))
+		if data is Dictionary:
+			existing = data.get("levels", [])
+	var merged := generated.duplicate()
+	var after := -1
+	for id in existing:
+		var at := merged.find(id)
+		if at >= 0:
+			after = at
+		else:
+			after += 1
+			merged.insert(after, id)
+	return merged
 
 
 static func _stop(at: float, wall: String, void_color: String, accent: String) -> PaletteStop:
@@ -47,13 +75,17 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	# Sections: p = pattern, n = count, i = intensity (0..1), spin = ground
 	# spin in °/s from there on (ramp = seconds to reach it), rest = seconds
 	# of floor after. See LevelGenerator.Spec.
+	#
+	# Spin only ever turns one way within a level and only ever speeds up
+	# (Nicola, 2026-11-19): the player learns which way to lean and leans
+	# harder, rather than being caught out by a reversal.
 
 	# 1. Sunrise: learn each idea alone, then a first taste of spin.
 	var dawn := LevelGenerator.Spec.new()
 	dawn.id = "01_dawn"
 	dawn.display_name = "Dawn"
 	dawn.seed = 1107
-	dawn.base_speed = 13.65
+	dawn.base_speed = 20.0
 	# Slow, so holes are drawn bigger (easier to read from afar) and the
 	# floor between ideas is short: something to do every second.
 	dawn.intro_seconds = 2.0
@@ -86,12 +118,12 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	]
 	specs.append(dawn)
 
-	# 2. Into the sea: currents. The spin is always on and the tide turns.
+	# 2. Into the sea: currents. The spin is always on and the current keeps building.
 	var tide := LevelGenerator.Spec.new()
 	tide.id = "02_tide"
 	tide.display_name = "Tide"
 	tide.seed = 2214
-	tide.base_speed = 17.5
+	tide.base_speed = 23.2
 	tide.intro_seconds = 2.0
 	tide.breather = 0.6
 	tide.hole_scale = 1.1
@@ -99,14 +131,14 @@ func _specs() -> Array[LevelGenerator.Spec]:
 		{"p": "gate", "n": 2, "i": 0.3, "spin": 15.0, "ramp": 1.5},
 		{"p": "slalom", "n": 4, "i": 0.35},
 		{"p": "ring", "n": 2, "i": 0.4},
-		{"p": "gate", "n": 2, "i": 0.4, "spin": -20.0, "ramp": 0.6},  # the tide turns
+		{"p": "gate", "n": 2, "i": 0.4, "spin": 20.0, "ramp": 1.5},  # the current picks up
 		{"p": "pad_run", "n": 4, "i": 0.35, "rest": 0.8},
 		{"p": "corkscrew", "n": 12, "i": 0.4},
 		{"p": "combo", "n": 2, "i": 0.45},
-		{"p": "split", "n": 2, "i": 0.5, "spin": 28.0, "ramp": 0.5},
+		{"p": "split", "n": 2, "i": 0.5, "spin": 25.0, "ramp": 1.5},
 		{"p": "funnel", "n": 5, "i": 0.5},
 		{"p": "pad_run", "n": 5, "i": 0.5},
-		{"p": "slalom", "n": 5, "i": 0.55, "spin": -30.0, "ramp": 0.8},
+		{"p": "slalom", "n": 5, "i": 0.55, "spin": 30.0, "ramp": 1.5},
 		{"p": "corkscrew", "n": 14, "i": 0.55},
 		{"p": "echo_run", "n": 5, "i": 0.6},
 		{"p": "gate", "n": 4, "i": 0.6},
@@ -120,12 +152,12 @@ func _specs() -> Array[LevelGenerator.Spec]:
 	]
 	specs.append(tide)
 
-	# 3. Lava: fast, strong spin that snaps around, narrow lines, few breaks.
+	# 3. Lava: fast, strong spin that keeps winding up, narrow lines, few breaks.
 	var ember := LevelGenerator.Spec.new()
 	ember.id = "03_ember"
 	ember.display_name = "Ember"
 	ember.seed = 3391
-	ember.base_speed = 21.0
+	ember.base_speed = 27.0
 	ember.intro_seconds = 2.5
 	# The ball steers quicker than when Ember was first tuned: less floor
 	# between ideas keeps it the hardest of the three.
@@ -134,15 +166,15 @@ func _specs() -> Array[LevelGenerator.Spec]:
 		{"p": "gate", "n": 3, "i": 0.6, "spin": 25.0, "ramp": 1.0},
 		{"p": "slalom", "n": 4, "i": 0.65},
 		{"p": "combo", "n": 2, "i": 0.65},
-		{"p": "pad_run", "n": 5, "i": 0.65, "spin": -32.0, "ramp": 0.3},   # snap reversal
+		{"p": "pad_run", "n": 5, "i": 0.65, "spin": 32.0, "ramp": 1.0},
 		{"p": "corkscrew", "n": 22, "i": 0.7},
 		{"p": "funnel", "n": 6, "i": 0.7},
-		{"p": "split", "n": 1, "i": 0.75, "spin": 40.0, "ramp": 0.3},
+		{"p": "split", "n": 1, "i": 0.75, "spin": 38.0, "ramp": 1.0},
 		{"p": "bridge", "n": 16, "i": 0.75},
 		{"p": "combo", "n": 3, "i": 0.8},
-		{"p": "pad_run", "n": 6, "i": 0.8, "spin": -45.0, "ramp": 0.25},
+		{"p": "pad_run", "n": 6, "i": 0.8, "spin": 44.0, "ramp": 1.0},
 		{"p": "ring", "n": 3, "i": 0.85},
-		{"p": "corkscrew", "n": 24, "i": 0.85, "spin": 50.0, "ramp": 0.25},
+		{"p": "corkscrew", "n": 24, "i": 0.85, "spin": 50.0, "ramp": 1.0},
 		{"p": "slalom", "n": 4, "i": 0.9},
 		{"p": "pad_run", "n": 5, "i": 0.9},
 		{"p": "gate", "n": 5, "i": 0.95},

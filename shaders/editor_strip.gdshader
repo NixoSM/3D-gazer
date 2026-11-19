@@ -5,7 +5,6 @@
 // look exactly as they will play.
 shader_type canvas_item;
 
-#define HOLES_PLAIN_UNIFORMS
 #include "res://shaders/holes.gdshaderinc"
 
 uniform sampler2D wall_gradient : source_color, filter_linear, repeat_disable;

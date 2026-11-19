@@ -1,6 +1,6 @@
 class_name WorldView
 extends Node3D
-## The 3D scene: tunnel, ball, camera and sky, kept in sync with a GameSession.
+## The 3D scene: tunnel, ball, camera and the void, kept in sync with a GameSession.
 ##
 ## Reads the session's interpolated state each frame and pushes it into the
 ## views and shaders. Owns the per-level colours and the fade used between
@@ -17,25 +17,39 @@ var palette: LevelPalette
 ## 0 = clear, 1 = fully faded to the void colour.
 var fade := 0.0
 
-var _sky_material: ShaderMaterial
+## Radius of the void backdrop around the camera: beyond the farthest
+## tunnel chunk (TunnelView.VIEW_DISTANCE + a chunk), inside the camera's far plane.
+const BACKDROP_RADIUS := 200.0
+
+var _backdrop := MeshInstance3D.new()
+var _backdrop_material: ShaderMaterial
+var _environment: Environment
 var _time := 0.0
 
 
 func _ready() -> void:
-	_sky_material = ShaderMaterial.new()
-	_sky_material.shader = preload("res://shaders/void_sky.gdshader")
-	var sky := Sky.new()
-	sky.sky_material = _sky_material
-	sky.radiance_size = Sky.RADIANCE_SIZE_32
-	sky.process_mode = Sky.PROCESS_MODE_REALTIME
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
-	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
-	env.glow_enabled = false
-	environment_node.environment = env
+	_backdrop_material = ShaderMaterial.new()
+	_backdrop_material.shader = preload("res://shaders/void_backdrop.gdshader")
+	# Drawn after everything else that is opaque, so only open pixels shade it.
+	_backdrop_material.render_priority = -100
+	var sphere := SphereMesh.new()
+	sphere.radius = BACKDROP_RADIUS
+	sphere.height = BACKDROP_RADIUS * 2.0
+	sphere.radial_segments = 32
+	sphere.rings = 16
+	_backdrop.name = "VoidBackdrop"
+	_backdrop.mesh = sphere
+	_backdrop.material_override = _backdrop_material
+	_backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_backdrop)
+	# No sky: a flat clear colour (the void's) behind the backdrop.
+	_environment = Environment.new()
+	_environment.background_mode = Environment.BG_COLOR
+	_environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
+	_environment.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
+	_environment.glow_enabled = false
+	environment_node.environment = _environment
 
 
 func set_level(level: LevelData, tuning: BallTuning) -> void:
@@ -79,7 +93,9 @@ func _process(delta: float) -> void:
 	var void_color := palette.void_at(progress)
 	tunnel.set_fog(void_color)
 	tunnel.set_fade(fade, void_color)
-	_sky_material.set_shader_parameter("void_color", void_color)
-	_sky_material.set_shader_parameter("fade", fade)
-	_sky_material.set_shader_parameter("fade_color", void_color)
+	_backdrop.global_position = camera.global_position
+	_backdrop_material.set_shader_parameter("void_color", void_color)
+	_backdrop_material.set_shader_parameter("fade", fade)
+	_backdrop_material.set_shader_parameter("fade_color", void_color)
+	_environment.background_color = void_color
 	ball.set_fade(fade, void_color)

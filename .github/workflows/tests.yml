@@ -21,3 +21,40 @@ jobs:
         run: ./godot --headless --import || true
       - name: Run tests
         run: ./godot --headless --script res://tests/run_tests.gd
+
+  pixels:
+    # Renders ~200 views of every level on the Mobile renderer (the iPhone's)
+    # with materials drawn as flat IDs, and checks every pixel against a
+    # ray-cast of the level file (tools/visual_oracle.py). See
+    # docs/ARCHITECTURE.md, "Checking the picture".
+    name: pixel oracle
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: 4.5.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Godot, a software Vulkan driver and the oracle's libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q mesa-vulkan-drivers xvfb
+          pip install -q numpy scipy pillow
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+      - name: Import project
+        run: ./godot --headless --import || true
+      - name: Render the audit views
+        run: |
+          xvfb-run -a -s "-screen 0 1280x1024x24" ./godot --rendering-driver vulkan --rendering-method mobile \
+            --resolution 585x1266 res://tools/visual_audit.tscn -- "$PWD/audit" 1.5
+      - name: Check every pixel against the ray-cast
+        run: python3 tools/visual_oracle.py audit --report audit_report
+      - name: Upload what was drawn and what should have been
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-oracle-report
+          path: audit_report

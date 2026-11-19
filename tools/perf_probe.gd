@@ -1,7 +1,7 @@
 extends Node
-## Rough shader-cost probe: average frame time at a few views, with and
-## without the shell (cut faces). Absolute numbers are meaningless on a
-## software renderer; the ratios between views are what to read.
+## Rough cost probe: average frame time, triangles and draw calls at the
+## view with the most floor and the one with the most void ahead, per level.
+## Absolute times are meaningless on a software renderer; read the ratios.
 ##
 ##   xvfb-run godot --rendering-driver opengl3 --resolution 585x1266 res://tools/perf_probe.tscn
 
@@ -43,25 +43,18 @@ func _run() -> void:
 				least_s = s
 			s += 5.0
 		for spot in [[least_s, "floor"], [best_s, "void"]]:
-			for shell in [true, false]:
-				_set_shell(world, shell)
-				_place(session, world, spot[0], 0.0)
-				await _frames(5)
-				var start := Time.get_ticks_usec()
-				await _frames(20)
-				var ms := (Time.get_ticks_usec() - start) / 20000.0
-				print("L%d %-5s shell=%-5s %.1f ms/frame" % [index + 1, spot[1], shell, ms])
-				if shell and OS.get_cmdline_user_args().size() > 0:
-					get_viewport().get_texture().get_image().save_png(OS.get_cmdline_user_args()[0] + "/L%d_%s.png" % [index + 1, spot[1]])
-		_set_shell(world, true)
+			_place(session, world, spot[0], 0.0)
+			world.tunnel.build_visible_now(-world.camera.global_position.z)
+			await _frames(5)
+			var start := Time.get_ticks_usec()
+			await _frames(20)
+			var ms := (Time.get_ticks_usec() - start) / 20000.0
+			var drawn := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)
+			var calls := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)
+			print("L%d %-5s %.1f ms/frame  %d triangles in scene, %d drawn, %d draw calls" % [index + 1, spot[1], ms, world.tunnel.triangle_count(), drawn, calls])
+			if OS.get_cmdline_user_args().size() > 0:
+				get_viewport().get_texture().get_image().save_png(OS.get_cmdline_user_args()[0] + "/L%d_%s.png" % [index + 1, spot[1]])
 	get_tree().quit(0)
-
-
-func _set_shell(world: WorldView, on: bool) -> void:
-	for chunk in world.tunnel.get_children():
-		var shell := chunk.get_node_or_null("Shell")
-		if shell:
-			shell.visible = on
 
 
 func _place(session: GameSession, world: WorldView, s: float, angle: float) -> void:

@@ -1,0 +1,207 @@
+extends TestCase
+## TunnelMesher builds the tunnel the player sees. These tests hold it to
+## the level's definition (LevelData.floor_distance, what the ball falls by)
+## without looking at any picture:
+##   * the floor covers exactly the solid wall, once (no holes in the floor,
+##     no floor over a hole, nothing drawn twice);
+##   * the floor is watertight: every triangle edge is shared by two
+##     triangles except along the holes' edges and the ends of the stretch,
+##     including where two chunks meet (no cracks, no T-junctions);
+##   * every edge of every hole has a cut face welded to it;
+##   * a chunk stays within its triangle and time budget.
+
+const ANGLE_BUCKETS := 64
+const ANGLE_BUCKET := TAU / ANGLE_BUCKETS
+
+
+## A stretch with every kind of edge: a ring, a gate across the angle seam,
+## two holes blending into one across a chunk boundary, a twisted bridge,
+## and a narrow sliver of floor between two holes.
+func _level() -> LevelData:
+	var holes: Array[HoleData] = [
+		HoleData.new(3.0, 3.0, 0.0, TAU),
+		HoleData.new(9.0, 6.0, deg_to_rad(350.0), deg_to_rad(70.0)),
+		HoleData.new(14.0, 8.0, deg_to_rad(120.0), deg_to_rad(40.0)),
+		HoleData.new(15.5, 2.5, deg_to_rad(150.0), deg_to_rad(30.0)),
+		HoleData.new(22.0, 11.0, deg_to_rad(200.0), deg_to_rad(250.0), deg_to_rad(6.0)),
+		HoleData.new(26.0, 4.0, deg_to_rad(20.0), deg_to_rad(60.0)),
+		HoleData.new(26.0, 4.0, deg_to_rad(88.0), deg_to_rad(60.0)),
+	]
+	return make_level(holes)
+
+
+func _chunks(level: LevelData) -> Array:
+	return [TunnelMesher.build(level, 0.0, 18.0), TunnelMesher.build(level, 18.0, 36.0)]
+
+
+static func _surface(v: Vector3) -> Vector2:
+	return Vector2(-v.z, fposmod(atan2(v.x, -v.y), TAU))
+
+
+func test_floor_covers_exactly_the_solid_wall() -> void:
+	var level := _level()
+	var triangles: Array[PackedVector2Array] = []
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		for i in range(0, geometry.floor_indices.size(), 3):
+			var a := _surface(geometry.floor_vertices[geometry.floor_indices[i]])
+			var b := _surface(geometry.floor_vertices[geometry.floor_indices[i + 1]])
+			var c := _surface(geometry.floor_vertices[geometry.floor_indices[i + 2]])
+			# Unwrap around the angle seam so the triangle is one piece.
+			b.y = a.y + wrapf(b.y - a.y, -PI, PI)
+			c.y = a.y + wrapf(c.y - a.y, -PI, PI)
+			assert_true(absf((b - a).cross(c - a)) > 1e-12, "degenerate floor triangle at s %.3f" % a.x)
+			triangles.append(PackedVector2Array([a, b, c]))
+	# Bucket the triangles on a coarse grid of the unrolled wall.
+	var buckets := {}
+	for t in triangles.size():
+		var tri := triangles[t]
+		var lo := Vector2(minf(tri[0].x, minf(tri[1].x, tri[2].x)), minf(tri[0].y, minf(tri[1].y, tri[2].y)))
+		var hi := Vector2(maxf(tri[0].x, maxf(tri[1].x, tri[2].x)), maxf(tri[0].y, maxf(tri[1].y, tri[2].y)))
+		for bs in range(floori(lo.x / 0.5), floori(hi.x / 0.5) + 1):
+			for ba in range(floori(lo.y / ANGLE_BUCKET), floori(hi.y / ANGLE_BUCKET) + 1):
+				var key := Vector2i(bs, posmod(ba, ANGLE_BUCKETS))
+				if not buckets.has(key):
+					buckets[key] = []
+				buckets[key].append(t)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var wrong := 0
+	var checked := 0
+	var first_wrong := ""
+	for n in 6000:
+		var p := Vector2(rng.randf_range(0.01, 35.99), rng.randf_range(0.0, TAU))
+		var d := level.floor_distance(p.x, p.y)
+		if absf(d) < 0.02:
+			continue  # on an edge: the mesh is a few millimetres off the true curve
+		checked += 1
+		var cover := 0
+		var key := Vector2i(floori(p.x / 0.5), posmod(floori(p.y / ANGLE_BUCKET), ANGLE_BUCKETS))
+		for t in buckets.get(key, []):
+			var tri := triangles[t]
+			for shift in [0.0, TAU, -TAU]:
+				if Geometry2D.point_is_inside_triangle(p + Vector2(0.0, shift), tri[0], tri[1], tri[2]):
+					cover += 1
+		var want := 1 if d > 0.0 else 0
+		if cover != want:
+			wrong += 1
+			if first_wrong.is_empty():
+				first_wrong = "s %.3f angle %.1f° d %.3f: covered %d times" % [p.x, rad_to_deg(p.y), d, cover]
+	assert_true(checked > 5000)
+	assert_eq(wrong, 0, first_wrong)
+
+
+func test_floor_is_watertight_across_cells_and_chunks() -> void:
+	var level := _level()
+	var keys := {}
+	var vertices: Array[Vector3] = []
+	var edges := {}
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		for i in range(0, geometry.floor_indices.size(), 3):
+			var corner := []
+			for j in 3:
+				var v := geometry.floor_vertices[geometry.floor_indices[i + j]]
+				var key := Vector3i(roundi(v.x * 1e5), roundi(v.y * 1e5), roundi(v.z * 1e5))
+				if not keys.has(key):
+					keys[key] = vertices.size()
+					vertices.append(v)
+				corner.append(keys[key])
+			if corner[0] == corner[1] or corner[1] == corner[2] or corner[0] == corner[2]:
+				continue  # degenerate: covers nothing
+			for j in 3:
+				var a: int = corner[j]
+				var b: int = corner[(j + 1) % 3]
+				var edge := Vector2i(mini(a, b), maxi(a, b))
+				edges[edge] = edges.get(edge, 0) + 1
+	var loose := 0
+	var example := ""
+	for edge: Vector2i in edges:
+		var uses: int = edges[edge]
+		var a := _surface(vertices[edge.x])
+		var b := _surface(vertices[edge.y])
+		var at_ends := (absf(a.x) < 1e-4 and absf(b.x) < 1e-4) or (absf(a.x - 36.0) < 1e-4 and absf(b.x - 36.0) < 1e-4)
+		if uses > 2:
+			loose += 1
+			example = "edge used %d times at s %.3f" % [uses, a.x]
+		elif uses == 1 and not at_ends:
+			# Only the holes' edges may be open, and they lie on the contour.
+			var da := absf(level.floor_distance(a.x, a.y))
+			var db := absf(level.floor_distance(b.x, b.y))
+			if da > 0.01 or db > 0.01:
+				loose += 1
+				example = "open edge from s %.3f %.1f° to s %.3f %.1f° (d %.3f, %.3f)" % [a.x, rad_to_deg(a.y), b.x, rad_to_deg(b.y), da, db]
+	assert_eq(loose, 0, example)
+
+
+func test_every_hole_edge_has_a_cut_face() -> void:
+	var level := _level()
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		# Open floor edges (used by one triangle, not at the chunk's ends)...
+		var edges := {}
+		for i in range(0, geometry.floor_indices.size(), 3):
+			for j in 3:
+				var a := _key(geometry.floor_vertices[geometry.floor_indices[i + j]])
+				var b := _key(geometry.floor_vertices[geometry.floor_indices[i + (j + 1) % 3]])
+				if a == b:
+					continue
+				var edge := [a, b] if str(a) < str(b) else [b, a]
+				edges[edge] = edges.get(edge, 0) + 1
+		# ...must each be the top of a cut face.
+		var tops := {}
+		for i in range(0, geometry.wall_vertices.size(), 4):
+			var a := _key(geometry.wall_vertices[i])
+			var b := _key(geometry.wall_vertices[i + 1])
+			tops[[a, b] if str(a) < str(b) else [b, a]] = true
+			# The face goes straight out through the shell, the full thickness.
+			var out := geometry.wall_vertices[i + 3]
+			var top := geometry.wall_vertices[i]
+			assert_near(Vector2(out.x, out.y).length() - Vector2(top.x, top.y).length(), TunnelMath.WALL_THICKNESS, 1e-4)
+			assert_near(out.z, top.z, 1e-5)
+		var missing := 0
+		var example := ""
+		for edge in edges:
+			if edges[edge] != 1:
+				continue
+			var s_a: float = -float(edge[0].z) / 1e5
+			var s_b: float = -float(edge[1].z) / 1e5
+			var chunk_end := func(s: float) -> bool: return fmod(s + 1e-4, 18.0) < 2e-4
+			if chunk_end.call(s_a) and chunk_end.call(s_b):
+				continue
+			if not tops.has(edge):
+				missing += 1
+				example = "first at s %.3f, %.1f°" % [s_a, rad_to_deg(atan2(edge[0].x, -edge[0].y))]
+		assert_eq(missing, 0, "hole edges without a cut face, " + example)
+		assert_true(not tops.is_empty())
+
+
+func test_chunks_stay_within_budget() -> void:
+	var level := LevelSerializer.load_file("res://levels/03_ember.json").level
+	var worst_triangles := 0
+	var worst_ms := 0.0
+	var s := 0.0
+	while s < 360.0:
+		var start := Time.get_ticks_usec()
+		var geometry := TunnelMesher.build(level, s, s + TunnelView.CHUNK_LENGTH)
+		worst_ms = maxf(worst_ms, (Time.get_ticks_usec() - start) / 1000.0)
+		worst_triangles = maxi(worst_triangles, geometry.triangle_count())
+		s += TunnelView.CHUNK_LENGTH
+	# About nine chunks are on screen: keep the tunnel well under 100k triangles.
+	assert_true(worst_triangles < 11000, "worst chunk has %d triangles" % worst_triangles)
+	# Built on worker threads ahead of the camera; generous for slow CI machines.
+	assert_true(worst_ms < 1000.0, "worst chunk took %.0f ms" % worst_ms)
+
+
+func test_mesh_matches_physics_where_the_ball_falls() -> void:
+	# The ball falls by floor_distance; a floor vertex is never over a hole
+	# and a cut face never stands on solid floor.
+	var level := _level()
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		for i in geometry.floor_vertices.size():
+			var p := _surface(geometry.floor_vertices[i])
+			assert_true(level.floor_distance(p.x, p.y) > -0.01, "floor vertex over a hole at s %.2f" % p.x)
+		for i in range(0, geometry.wall_vertices.size(), 4):
+			var p := _surface(geometry.wall_vertices[i])
+			assert_near(level.floor_distance(p.x, p.y), 0.0, 0.01, "cut face off the edge at s %.2f" % p.x)
+
+
+static func _key(v: Vector3) -> Vector3i:
+	return Vector3i(roundi(v.x * 1e5), roundi(v.y * 1e5), roundi(v.z * 1e5))
