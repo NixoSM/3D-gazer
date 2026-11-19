@@ -16,9 +16,13 @@ extends Camera3D
 ## Field of view grows with forward speed, so faster levels (and the speed-up
 ## within a level) *feel* faster: more of the wall streams past at the edges.
 @export var fov_at_12 := 64.0
-## Extra degrees of FOV per m/s above 12 m/s.
+## Extra degrees of FOV per m/s above 12 m/s, up to `knee_fov`...
 @export var fov_per_speed := 1.5
-@export var max_fov := 86.0
+@export var knee_fov := 86.0
+## ...then more slowly (the fastest levels go past 50 m/s, and a wider
+## view only distorts more), up to `max_fov`.
+@export var fast_fov_per_speed := 0.5
+@export var max_fov := 98.0
 ## Camera rumble from speed, in metres, reached at 24 m/s. Starts at 15 m/s.
 @export var speed_rumble := 0.022
 
@@ -63,7 +67,11 @@ func update_view(delta: float, s: float, angle: float, height: float, tunnel_rad
 
 
 func fov_for_speed(speed: float) -> float:
-	return clampf(fov_at_12 + (speed - 12.0) * fov_per_speed, fov_at_12, max_fov)
+	var fov_now := fov_at_12 + (speed - 12.0) * fov_per_speed
+	if fov_now > knee_fov:
+		var knee_speed := 12.0 + (knee_fov - fov_at_12) / fov_per_speed
+		fov_now = knee_fov + (speed - knee_speed) * fast_fov_per_speed
+	return clampf(fov_now, fov_at_12, max_fov)
 
 
 ## Brief FOV widening, for echo jumps.

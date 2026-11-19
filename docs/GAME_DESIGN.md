@@ -48,8 +48,9 @@ the tunnel), painted in the editor's Spin panel as a direction, a starting
 rate and how much it grows.
 
 **Within a level the spin turns one way only and only ever speeds up**
-(Nicola, November 2026): Dawn 8 then 12 °/s late on, Tide 15 rising to
-30 °/s, Ember 25 rising to 50 °/s, all the same way. The player learns
+(Nicola, November 2026): from a gentle 12 °/s near the end of the first
+level to 160 °/s at the end of the last (the table under
+[The seven levels](#the-seven-levels) has each level's range). The player learns
 which way to lean and has to lean harder; an earlier version reversed it
 mid-level, which read as a trick rather than a challenge. In the simulation, rolling
 resistance relaxes the ball's sideways speed towards the spin drift
@@ -82,66 +83,95 @@ thin dashed ring on the wall marks your best distance.
 
 ## Speed and length
 
-Forward speed grows linearly with progress: `v = base · (1 + 0.2 · s/L)`.
-Because speed depends on position, the run time is
-`T = L / (0.2 · base) · ln(1.2)`, and levels are sized so that `T = 60 s`
-(see `SpeedProfile`). Base speeds: Dawn 20 m/s, Tide 23.2, Ember 27.
+Forward speed grows linearly with progress, `v = base · (1 + ramp · s/L)`,
+times an optional **surge** factor painted along the level (speed keys,
+see LEVEL_FORMAT.md): a factor that steps up over half a second feels like
+a gear change. Mixtape steps up 4% at each of its four splices, Supernova
+10% at the start of each of its five later acts (34 m/s at the start, 51
+by the end). Levels are sized so that they last about a minute (Lemonade
+58 s), whatever their speeds (`LevelData.duration()`).
 
 Numbers alone did not make the faster levels *feel* faster on a phone, so
 speed drives the presentation too:
 
-- **Field of view** follows speed: 64° at 12 m/s plus 1.5° per m/s (Dawn
-  starts at 67°, Ember ends near 86°), so more wall streams past the edges.
+- **Field of view** follows speed: 64° at 12 m/s plus 1.5° per m/s up to
+  86° (about 27 m/s), then only 0.5° per m/s, up to 98° (Supernova's top
+  speed). Past 27 m/s the full rate bent the edges of the screen into a
+  fish-eye; the slower rate keeps the speed reading without that.
 - The **floor pattern** repeats faster on faster levels (its scale follows
-  3 m on Dawn down to about 2 m on Ember), so it streams past much quicker.
-  (Cartoon speed lines were tried and rejected as silly.)
+  speed), so it streams past much quicker. (Cartoon speed lines were tried
+  and rejected as silly.)
 - A fine **camera rumble** above 15 m/s.
 
-## Level patterns
+## The seven levels
 
-Bundled levels are written as a **script of sections** (`tools/generate_levels.gd`)
-that `tools/level_generator.gd` turns into plain level data. Each section
-names a pattern, how many, an intensity and optionally a new spin. The seed
-only varies details inside a pattern, so every level has a designed shape.
-The generator follows a "safe path" around the tunnel that drifts at a speed
-a player can follow, so the route spirals and the camera rotation becomes
-part of play.
+The levels are designed by hand. Each is a script in `tools/levels/`
+written against a clock (`LevelBuilder`: "a ring at 12.7 s lasting 0.18 s",
+"a gate at 0.3 s after the funnel, 40° right of where the ball is"), which
+`tools/author_levels.gd` turns into the plain JSON the game and the editor
+read. Writing on a clock keeps every pattern on the beat it was written
+for, at any speed; the builder also knows the ball's physics (how long a
+jump of each size is in the air, how far the spin carries an echo), so
+landings are placed where a player's jump actually comes down.
 
-| Pattern | What the player does |
-|---|---|
-| gate | A wide hole with one gap: steer into the gap. |
-| ring | A full ring: jump it. |
-| echo run | Evenly spaced rings matched to the *maximum* jump: one long swipe, then echo through. Tuned to the maximum because any long swipe gives exactly that height, so it is reproducible. |
-| pad run | An echo run whose landing strips are pads around a wandering path: every echo must land on target. |
-| bridge | A narrow strip of floor that winds around the tunnel: one twisted hole, so its edges are clean diagonals. |
-| corkscrew | A bridge that turns faster, enough to need a constant lean. |
-| slalom | Gates whose gaps alternate either side of the path, on a beat. |
-| funnel | Gates back to back whose gap narrows in even, blocky steps. |
-| combo | A ring, then a gate just after the landing with its gap off to one side. |
-| split | Two gaps on opposite sides: pick one. |
+| # | Level | Speed (m/s) | Spin (°/s) | The idea |
+|---|---|---|---|---|
+| 1 | **Lemonade** | 20 to 24 | none, then 12 to 16 | The first level: every mechanic introduced once, repeated once, then combined (lean, big and small jumps, steering in the air, echo, aimed echo, leaning against the spin). Short hints name each one the moment the layout asks for it. |
+| 2 | **Bubblegum** | 23 to 28 | 15 to 28 | A clear step up and a tour of shapes: polka dots, a zigzag ribbon, floating hoops, a half-turn corkscrew, chevrons, hop-leap-hop. |
+| 3 | **Hot Sauce** | 27 to 32 | 25 to 50 | As hard as Ember, the hardest of the old levels: the heat comes in waves, each hotter than the last, with two seconds to breathe between. |
+| 4 | **Moon Bounce** | 25 to 30 | 15 to 35 | Gimmick: floating platforms. The tunnel crumbles into hoops, arcs and moonlets in a starry void: a forked highway, a spiral staircase that turns the world over, stepping stones, a broken ribbon, then it reassembles. |
+| 5 | **Mixtape** | 28 to 36 | 32 to 56 | Mastery: five "tracks" (lean, jump sizes, echo, floating, a B-side), each its own colour and a notch faster, spliced by a ring. Side doors against the spin, half-height echo runs, an echo reshaped into a leap. |
+| 6 | **Screwball** | 28 to 32 | 30 to 70 | Hard gimmick: every floor is a screw thread. Rifling, floating threads that turn with, faster than and against the current, stripped threads, a screw that turns faster than the ball can roll (bounce it: each full echo lands one thread round) and a four-thread nut. Wide threads, no pixel-perfect jumps: it asks you to read which way the floor moves. |
+| 7 | **Supernova** | 34 to 51 | 50 to 160 | Maniacal: a star's life in six titled acts (Ignition, Corona, Solar wind, Red giant, Collapse, Supernova), each faster and spinning harder, with the colour flickering in bands and the void pulsing. Not meant to be finished on the first try. |
 
-The three levels:
+Some patterns appear in several levels: **gates** (a hole with one gap),
+**rings** (jump), **echo runs** and **pad runs** (rings spaced for a full
+jump, the landing strips plain or narrow pads), **ribbons and bridges**
+(floor bands that wind round, made with twisted holes), **dots**, **chevrons**,
+**zigzags**, **islands** of floor floating in the void, **threads** (several
+bands winding round together), and **funnels**: two walls that close in
+from either side and gather a player into one lane wherever they were.
+Funnels open from just behind the ball (or from the edges of the road
+before them) and close at 80 °/s at most, slower than the ball can cross,
+so a funnel can never be met from behind. Spin-aware placement matters at
+these spins: an echo drifts `spin · (T − (1 − e^(−kT))/k)` degrees in the
+air, about half of `spin · T`, because the echo resets the ball's sideways
+speed, and pads, debris and threads are placed with that.
 
-- **Dawn** teaches one idea at a time (lean, jump, echo), then introduces a
-  gentle spin (8 to 12 °/s). It is slow, so its holes are drawn 1.4× longer
-  (`Spec.hole_scale`): at low speed a short hole is a thin sliver in the
-  distance and hard to spot.
-- **Tide** is about currents: the spin is on from the start and the tide
-  turns (+15, −20, +28, −30 °/s), with pad runs and corkscrews.
-Every gate's gap opens just beyond the previous one, so each asks for a
-lean, and Dawn and Tide start after 2 s and keep 0.6× the usual floor
-between ideas (`Spec.breather`): there is little plain scrolling.
+**Difficulty is measured with the bot** (`tools/rate_levels.gd`). The
+sweep plays each level with steering delays from 0 to 0.5 s: the longest
+delay it still finishes with is the level's *reaction budget*. Then two
+human-like profiles play it 24 times each (a reaction delay plus a wobbling
+hand and swipes a little early, late or off in size, a different seed each
+run): **steady** (0.25 s) and **shaky** (0.3 s, wobblier). The finish rate
+is roughly how often a player of that kind gets through once they know the
+level.
 
-- **Ember** is the test: 21 to 25 m/s, spin from 25 up to 50 °/s that snaps
-  round in a quarter of a second, narrow bridges, combos and long pad runs,
-  and almost no rest.
+| Level | Reaction budget | Steady: finished (median reached) | Shaky: finished (median reached) |
+|---|---|---|---|
+| Lemonade | 0.45 s | 100% (100%) | 91% (100%) |
+| Bubblegum | 0.50 s or more | 91% (100%) | 37% (75%) |
+| Hot Sauce | 0.15 s | 29% (68%) | 8% (45%) |
+| Moon Bounce | 0.30 s | 50% (100%) | 8% (60%) |
+| Mixtape | 0.20 s | 12% (60%) | 0% (46%) |
+| Screwball | 0.15 s | 25% (65%) | 0% (25%) |
+| Supernova | 0.05 s | 0% (27%) | 0% (19%) |
+| *Ember (old, for comparison)* | *0.20 s* | *37% (50%)* | *12% (37%)* |
 
+(November 2026, 24 runs per profile. With 24 runs a rate is good to about
+±10 points, so Mixtape and Screwball are about as hard as each other for a
+steady player; Screwball is the harder one for a shaky player. The sweep
+is not monotonic on every level: a bot that reacts later sometimes takes
+a different line and gets further. The sweep stops at 0.5 s, so it cannot
+tell the two easiest levels apart; the profiles can.)
+
+Tests play every level to the end with `Autopilot`, perfectly and with
+each level's reaction delay from that table (`tests/test_autopilot.gd`).
 `LevelValidator` rejects any gap that cannot be jumped at the local speed.
-Tests play every level to the end with `Autopilot`, both perfectly and with
-a **0.2 s reaction delay** on its steering (roughly a person's). The delay
-the bot can survive measures difficulty: Dawn finishes at 0.35 s, Tide
-fails from 0.35 s, Ember from 0.3 s. (The bot steers with fixed, person-like
-gains in m/s², so a quicker ball does not make it a better player.)
+(The bot steers with fixed, person-like gains in m/s², so a quicker ball
+does not make it a better player. These ratings are a bot's: they rank the
+levels well but are not a person's numbers. Only playing on the phone
+says how they feel.)
 
 ## Feel ("juice") inventory
 

@@ -105,3 +105,49 @@ func test_version_1_files_still_load_without_spin() -> void:
 	assert_true(parsed.ok(), "%s" % [parsed.errors])
 	assert_eq(parsed.level.spin.size(), 0)
 	assert_eq(parsed.level.spin_at(50.0), 0.0)
+
+
+func test_speed_keys_and_hints_round_trip() -> void:
+	var level := make_level()
+	level.speed_keys = [SpeedKey.new(300.0, 1.2), SpeedKey.new(100.0, 1.0)]
+	level.hints = [LevelHint.new(50.0, "swipe up to jump"), LevelHint.new(10.0, "tilt to roll")]
+	level.sort()
+	var parsed := LevelSerializer.from_json(LevelSerializer.to_json(level))
+	assert_true(parsed.ok(), "round trip errors: %s" % [parsed.errors])
+	assert_eq(parsed.level.speed_keys.size(), 2)
+	assert_eq(parsed.level.hints.size(), 2)
+	assert_eq(parsed.level.hints[0].text, "tilt to roll", "hints are sorted by distance")
+	assert_near(parsed.level.speed_factor_at(200.0), 1.1, 0.001)
+	assert_near(parsed.level.speed_factor_at(900.0), 1.2, 0.001, "holds the last key")
+
+
+func test_levels_without_speed_keys_are_unchanged() -> void:
+	var level := make_level()
+	level.base_speed = 20.0
+	assert_near(level.speed_at(0.0), SpeedProfile.speed_at(0.0, level.length, 20.0, level.speed_ramp), 0.0001)
+	var saved := LevelSerializer.to_dict(level)
+	assert_false(saved.has("speed"), "no keys, no field")
+	assert_false(saved.has("hints"), "no hints, no field")
+
+
+func test_time_with_speed_keys_matches_simulation() -> void:
+	var level := make_level()
+	level.length = 600.0
+	level.base_speed = 20.0
+	level.speed_keys = [SpeedKey.new(150.0, 1.0), SpeedKey.new(170.0, 1.5)]
+	var sim := BallSimulation.new(level, make_tuning())
+	while sim.is_playing() and sim.time < 60.0:
+		sim.step(1.0 / 120.0, InputFrame.new())
+	assert_eq(sim.phase, BallSimulation.Phase.FINISHED)
+	assert_near(sim.time, level.duration(), 0.05)
+	assert_near(level.s_at_time(level.time_at(400.0)), 400.0, 0.01)
+	assert_true(level.duration() < SpeedProfile.duration(600.0, 20.0, level.speed_ramp), "the surge makes it quicker")
+
+
+func test_rejects_bad_speed_keys_and_empty_hints() -> void:
+	var level := make_level()
+	level.speed_keys = [SpeedKey.new(50.0, 9.0)]
+	level.hints = [LevelHint.new(10.0, "")]
+	var errors := LevelSerializer.validate(level)
+	assert_eq(errors.size(), 2, "%s" % [errors])
+

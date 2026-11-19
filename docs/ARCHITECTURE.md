@@ -160,7 +160,7 @@ hand-written flat (cel) shading.
 |---|---|
 | Tune how the ball feels | `resources/ball_tuning.tres` in the inspector |
 | Add a level | Make it in the level editor (LEVEL_EDITOR.md); the JSON goes in `levels/` and its id in `levels/manifest.json` |
-| Add a hole pattern | `tools/level_generator.gd`, then re-run `tools/generate_levels.gd` |
+| Add a hole pattern | For the bundled levels, `tools/level_builder.gd` (then use it in a script in `tools/levels/` and re-run `tools/author_levels.gd`); for the editor's "Insert a pattern", `tools/level_generator.gd` |
 | Add a new obstacle type | `LevelData` + serializer (bump `format_version`), `BallSimulation`, `TunnelMesher` (or a new view) and the pixel oracle, the validator, the editor (`StripView` and `editor_strip.gdshader`), tests |
 | Add a ball look | Duplicate `resources/balls/classic.tres`, edit it, apply with `BallView.apply_skin()` |
 | Change sounds | `ToneSynth` (keep the `play_*` API) |

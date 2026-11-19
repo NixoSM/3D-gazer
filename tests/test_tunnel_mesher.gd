@@ -227,20 +227,31 @@ func test_outline_comes_from_true_edge_distances() -> void:
 
 
 func test_chunks_stay_within_budget() -> void:
-	var level := LevelSerializer.load_file("res://levels/03_ember.json").level
-	var worst_triangles := 0
-	var worst_ms := 0.0
-	var s := 0.0
-	while s < 360.0:
-		var start := Time.get_ticks_usec()
-		var geometry := TunnelMesher.build(level, s, s + TunnelView.CHUNK_LENGTH)
-		worst_ms = maxf(worst_ms, (Time.get_ticks_usec() - start) / 1000.0)
-		worst_triangles = maxi(worst_triangles, geometry.triangle_count())
-		s += TunnelView.CHUNK_LENGTH
-	# About nine chunks are on screen: keep the tunnel well under 100k triangles.
-	assert_true(worst_triangles < 11000, "worst chunk has %d triangles" % worst_triangles)
-	# Built on worker threads ahead of the camera; generous for slow CI machines.
-	assert_true(worst_ms < 1000.0, "worst chunk took %.0f ms" % worst_ms)
+	# Every bundled level, at its busiest: the chunks with the most holes.
+	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://levels/manifest.json"))
+	for id in manifest["levels"]:
+		var level := LevelSerializer.load_file("res://levels/%s.json" % id).level
+		var busiest := []
+		var s := 0.0
+		while s < level.length:
+			busiest.append([level.holes_between(s, s + TunnelView.CHUNK_LENGTH).size(), s])
+			s += TunnelView.CHUNK_LENGTH
+		busiest.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+		var worst_triangles := 0
+		var worst_ms := 0.0
+		for entry in busiest.slice(0, 6):
+			var start := Time.get_ticks_usec()
+			var geometry := TunnelMesher.build(level, entry[1], entry[1] + TunnelView.CHUNK_LENGTH)
+			worst_ms = maxf(worst_ms, (Time.get_ticks_usec() - start) / 1000.0)
+			worst_triangles = maxi(worst_triangles, geometry.triangle_count())
+		# About nine chunks are on screen. Ember, the busiest old level, peaked
+		# at 10k a chunk; the new levels pack in far more edges (Screwball's
+		# threads run the whole level) and peak near 22k, about 190k on
+		# screen at the very busiest: still small for a phone GPU, but
+		# keep it from growing further.
+		assert_true(worst_triangles < 24000, "%s: worst chunk has %d triangles" % [id, worst_triangles])
+		# Built on worker threads ahead of the camera; generous for slow CI machines.
+		assert_true(worst_ms < 1000.0, "%s: worst chunk took %.0f ms" % [id, worst_ms])
 
 
 func test_mesh_matches_physics_where_the_ball_falls() -> void:
