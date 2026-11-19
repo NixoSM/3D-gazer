@@ -8,6 +8,8 @@ extends TestCase
 ##     triangles except along the holes' edges and the ends of the stretch,
 ##     including where two chunks meet (no cracks, no T-junctions);
 ##   * every edge of every hole has a cut face welded to it;
+##   * the edge distance the floor shader draws the outline from is the
+##     true one wherever ink can reach (no stray black lines);
 ##   * a chunk stays within its triangle and time budget.
 
 const ANGLE_BUCKETS := 64
@@ -171,6 +173,57 @@ func test_every_hole_edge_has_a_cut_face() -> void:
 				example = "first at s %.3f, %.1f°" % [s_a, rad_to_deg(atan2(edge[0].x, -edge[0].y))]
 		assert_eq(missing, 0, "hole edges without a cut face, " + example)
 		assert_true(not tops.is_empty())
+
+
+func test_outline_comes_from_true_edge_distances() -> void:
+	# tunnel_floor.gdshader inks the floor where the edge distance it gets
+	# (interpolated across each triangle from the vertices) is small. Inside
+	# every floor triangle, wherever that interpolated distance or the true
+	# one is within ink reach, the two must agree. A long strip from one
+	# hole's corner to another's once carried a near-edge distance along its
+	# whole length: thin black lines across plain floor.
+	var level := _level()
+	var checked := 0
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		var v := geometry.floor_vertices
+		var uv := geometry.floor_uvs
+		var idx := geometry.floor_indices
+		for i in range(0, idx.size(), 3):
+			var p := [v[idx[i]], v[idx[i + 1]], v[idx[i + 2]]]
+			var d := [uv[idx[i]].x, uv[idx[i + 1]].x, uv[idx[i + 2]].x]
+			for a in 7:
+				for b in 7 - a:
+					var c := 6 - a - b
+					var interpolated: float = (d[0] * a + d[1] * b + d[2] * c) / 6.0
+					var q := _surface((p[0] * a + p[1] * b + p[2] * c) / 6.0)
+					var truth := level.floor_distance(q.x, q.y)
+					if minf(interpolated, truth) > TunnelMesher.INK_REACH:
+						continue
+					checked += 1
+					if absf(interpolated - truth) > 0.01:
+						assert_near(interpolated, truth, 0.01, "edge distance off at s %.2f, angle %.1f°" % [q.x, rad_to_deg(q.y)])
+						return
+	assert_true(checked > 10000, "only %d samples near edges" % checked)
+	# Every distance is finite (far from holes the field is INF), and every
+	# long triangle (a plain strip) is flat: with MSAA a pixel a sliver only
+	# grazes is shaded off the triangle, and a slope would extrapolate there
+	# into the ink.
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		var v := geometry.floor_vertices
+		var uv := geometry.floor_uvs
+		var idx := geometry.floor_indices
+		for i in range(0, idx.size(), 3):
+			var a := idx[i]
+			var b := idx[i + 1]
+			var c := idx[i + 2]
+			for d in [uv[a].x, uv[b].x, uv[c].x]:
+				if not (is_finite(d) and d >= 0.0 and d < 2.0):
+					assert_true(false, "floor vertex edge distance %f" % d)
+					return
+			var longest := maxf(v[a].distance_to(v[b]), maxf(v[b].distance_to(v[c]), v[c].distance_to(v[a])))
+			if longest > TunnelMesher.BAND and not (uv[a].x == uv[b].x and uv[b].x == uv[c].x):
+				assert_true(false, "%.1f m long floor triangle with a sloped edge distance (%.3f, %.3f, %.3f) at s %.2f" % [longest, uv[a].x, uv[b].x, uv[c].x, -v[a].z])
+				return
 
 
 func test_chunks_stay_within_budget() -> void:

@@ -41,6 +41,7 @@ func _ready() -> void:
 	floor_material = ShaderMaterial.new()
 	floor_material.shader = preload("res://shaders/tunnel_floor.gdshader")
 	floor_material.set_shader_parameter("outline_width", TunnelMesher.OUTLINE_WIDTH)
+	floor_material.set_shader_parameter("outline_max_width", TunnelMesher.OUTLINE_MAX_WIDTH)
 	wall_material = ShaderMaterial.new()
 	wall_material.shader = preload("res://shaders/tunnel_wall.gdshader")
 	_ripples.resize(MAX_RIPPLES)

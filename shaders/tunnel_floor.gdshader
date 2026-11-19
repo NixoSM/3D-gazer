@@ -39,6 +39,14 @@ uniform float outline_width = 0.25;    // metres of black along every edge (Tunn
 // outline_min_pixels (far away it would vanish).
 uniform float outline_max_screen = 0.011;
 uniform float outline_min_pixels = 1.5;
+// The minimum never makes the band wider than this (TunnelMesher.OUTLINE_MAX_WIDTH).
+// With its soft inner side the ink then never reaches further than 1.5x
+// this from an edge (TunnelMesher.INK_REACH): the mesher keeps every
+// vertex's edge distance exact (finely tessellated) up to there.
+uniform float outline_max_width = 0.4;
+// The ID view counts a pixel as outline where the ink darkens it by more
+// than this (so even a faint grey stray line shows up in the pixel oracle).
+const float INK_VISIBLE = 0.1;
 
 // Ball (s, angle, height) and radius, for the contact shadow and shading.
 uniform vec3 ball = vec3(0.0);
@@ -74,14 +82,32 @@ float inside(float value, float threshold) {
 	return 1.0 - smoothstep(threshold - w, threshold + w, value);
 }
 
+// How much black ink covers a fragment at `d` metres from the nearest
+// edge, where the edge distance changes by `per_pixel` metres per pixel.
+// The band is a quarter metre of floor, but never more than
+// outline_max_screen of the screen height and never less than
+// outline_min_pixels (that minimum never wider than outline_max_width).
+// Its inner side is softened by up to a pixel; the outer side is the
+// triangle edge itself, which MSAA smooths.
+float ink(float d, float per_pixel, float screen_height) {
+	float width = min(outline_width, outline_max_screen * screen_height * per_pixel);
+	width = max(width, min(outline_min_pixels * per_pixel, outline_max_width));
+	float soft = min(per_pixel, width * 0.5);
+	return 1.0 - smoothstep(width - soft, width + soft, d);
+}
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	edge_distance = UV.x;
 }
 
 void fragment() {
+	// The black outline. The ID view uses exactly the same ink, so the
+	// pixel oracle checks the outline the player sees, faint parts included.
+	float per_pixel = max(fwidth(edge_distance), 0.00001);
+	float outline = ink(edge_distance, per_pixel, VIEWPORT_SIZE.y);
 	if (gazer_debug_ids == 1) {
-		ALBEDO = edge_distance < outline_width ? ID_OUTLINE : ID_FLOOR;
+		ALBEDO = outline > INK_VISIBLE ? ID_OUTLINE : ID_FLOOR;
 	} else {
 		float s = -world_pos.z;
 		float angle = atan(world_pos.x, -world_pos.y);
@@ -153,15 +179,7 @@ void fragment() {
 		}
 
 		// --- Edges: the thick black outline ----------------------------------------------
-		// edge_distance is interpolated from exact per-vertex values, so its
-		// screen-space rate of change (metres per pixel across the edge) is
-		// well behaved. The outer side of the band is the triangle edge
-		// itself, which MSAA smooths; the inner side is softened by a pixel.
-		float per_pixel = max(fwidth(edge_distance), 0.00001);
-		float width = min(outline_width, outline_max_screen * VIEWPORT_SIZE.y * per_pixel);
-		width = max(width, outline_min_pixels * per_pixel);
-		float soft = min(per_pixel, width * 0.5);
-		color = mix(color, outline_color, 1.0 - smoothstep(width - soft, width + soft, edge_distance));
+		color = mix(color, outline_color, outline);
 
 		// --- Distance fades into the void colour, along the tunnel ---------------------
 		float ahead = s + CAMERA_POSITION_WORLD.z;

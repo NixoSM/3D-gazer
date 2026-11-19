@@ -51,7 +51,15 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x1024x24" ./godot --rendering-driver vulkan --rendering-method mobile \
             --resolution 585x1266 res://tools/visual_audit.tscn -- "$PWD/audit" 1.5
       - name: Check every pixel against the ray-cast
-        run: python3 tools/visual_oracle.py audit --report audit_report
+        run: python3 tools/visual_oracle.py audit --report audit_report/no_msaa
+      - name: Render the audit views again with the game's 4x MSAA
+        if: always()
+        run: |
+          xvfb-run -a -s "-screen 0 1280x1024x24" ./godot --rendering-driver vulkan --rendering-method mobile \
+            --resolution 585x1266 res://tools/visual_audit.tscn -- "$PWD/audit_msaa" 1.5 all msaa
+      - name: Check the MSAA views
+        if: always()
+        run: python3 tools/visual_oracle.py audit_msaa --report audit_report/msaa
       - name: Upload what was drawn and what should have been
         if: failure()
         uses: actions/upload-artifact@v4

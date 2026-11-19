@@ -82,7 +82,15 @@ came from that, so it was replaced wholesale.)
   (they opened one-pixel pinholes onto the void). Each contour segment is
   extruded straight out through the 0.8 m shell into a **cut face** that
   shares its top vertices with the floor, so a face can never come loose
-  from its edge. Floor vertices carry their distance to the edge (UV.x).
+  from its edge. Floor vertices carry their distance to the edge (UV.x),
+  which the floor shader draws the outline from. Interpolated across a
+  long strip that distance can be wildly off, so every cell within ink
+  reach (0.6 m, the widest the outline ever gets) is cut finely, and every
+  strip carries one constant distance just beyond that reach: perfectly
+  flat, so neither fwidth() nor MSAA's extrapolation at a strip's sliver
+  edges can find ink in it. (Strips used to start at 0.38 m and carry
+  their real distances; a strip from one hole's corner to the next then
+  drew a thin black line between them.)
 - **`TunnelView`** keeps chunks from one behind the camera to 150 m ahead.
   New chunks are built on worker threads (`WorkerThreadPool`), with the
   two nearest built on the spot if a worker is late. The first ten chunks
@@ -91,7 +99,8 @@ came from that, so it was replaced wholesale.)
   progress, rounded tiles, two-tone cel shading, contact shadow, echo
   waves, best-run marker, finish line, and the black outline, which is the
   floor within 0.25 m of an edge, drawn like an ink line (never thicker
-  than about 1% of the screen height, never thinner than 1.5 pixels).
+  than about 1% of the screen height, never thinner than 1.5 pixels,
+  never wider than 0.4 m).
   **`tunnel_wall.gdshader`** colours the cut faces: a darker wall tone, the
   tile seams carried down the face, a black line at the back of the shell.
   **`void_backdrop.gdshader`** is a sphere around the camera: flat void
@@ -109,16 +118,27 @@ longer has a shader copy of the field.
 under and over every kind of hole, and every 1.5 s of a bot's run through
 each level) on the Mobile renderer, with every shader drawing a flat
 **material ID** instead of its colour (`gazer_debug_ids`), MSAA off, and
-the camera saved next to each frame. `tools/visual_oracle.py` then works
-out what every pixel *should* be from the level file alone, by ray-casting
-the tunnel exactly as the game defines it (floor, outline, cut face, back
-line or void), and fails on any group of wrong pixels and on any single
-pinhole of void within 60 m. It shares no code with the renderer.
+the camera saved next to each frame. The floor's ID view computes the
+outline exactly as the colour view does, and counts a pixel as outline
+wherever the ink would darken it by more than 10%, so faint grey ink
+shows up too. `tools/visual_oracle.py` then works out what every pixel
+*should* be from the level file alone, by ray-casting the tunnel exactly
+as the game defines it (floor, outline by the same ink rule, cut face,
+back line or void), and fails on any group of wrong pixels, on any single
+pinhole of void within 60 m, and on 4 or more pixels of **stray ink**
+anywhere in a frame (outline drawn with nothing but floor for 4 pixels
+around: thin, often dotted lines that no single cluster would flag). It
+shares no code with the renderer. With `msaa` as the fourth argument the
+audit keeps the game's 4x MSAA on, and the oracle accepts blended pixels
+only where two materials really meet.
 
 ```sh
 xvfb-run -a godot --rendering-driver vulkan --rendering-method mobile \
     --resolution 585x1266 res://tools/visual_audit.tscn -- /tmp/audit
 python3 tools/visual_oracle.py /tmp/audit --report /tmp/audit_report
+# the same with MSAA on, and a denser bot run (every 0.5 s):
+... res://tools/visual_audit.tscn -- /tmp/audit_msaa 1.5 all msaa
+... res://tools/visual_audit.tscn -- /tmp/audit_dense 0.5
 ```
 
 The report has, for each failing frame, what was drawn, what should have
@@ -127,7 +147,9 @@ Mesa's software Vulkan driver (lavapipe), so the pictures are the iPhone's
 renderer, not an approximation. `tests/test_tunnel_mesher.gd` checks the
 same promises on the geometry itself, without rendering: the floor covers
 exactly the solid wall, it is watertight across cells and chunks, every
-hole edge has a cut face, and a chunk stays within its budget.
+hole edge has a cut face, the edge distance the outline is drawn from is
+the true one wherever ink can reach (and flat on every strip), and a
+chunk stays within its budget.
 
 The Mobile renderer is used on device. Every shader is unshaded with
 hand-written flat (cel) shading.

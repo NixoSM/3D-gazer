@@ -2,7 +2,7 @@ extends Node
 ## Material-ID renders of the tunnel for the pixel oracle (tools/visual_oracle.py).
 ##
 ##   xvfb-run -a godot --rendering-driver vulkan --rendering-method mobile \
-##       --resolution 585x1266 res://tools/visual_audit.tscn -- <output_dir> [bot_step_s] [levels]
+##       --resolution 585x1266 res://tools/visual_audit.tscn -- <output_dir> [bot_step_s] [levels|all] [msaa]
 ##
 ## For every bundled level it renders designed views (approaching, beside,
 ## under and over holes of every kind: rings, gates, twisted holes, the
@@ -15,6 +15,8 @@ extends Node
 ## projection) and the stretch of tunnel that was built. The oracle ray-casts
 ## the same view from the level file alone and reports every pixel that
 ## disagrees. `levels` is an optional comma-separated list of level indices.
+## `msaa` keeps the game's 4x MSAA on (the oracle then accepts blended
+## colours along real edges, and still catches anything stray elsewhere).
 ##
 ## Use the Mobile renderer (Vulkan; lavapipe in the cloud): it is the one
 ## the iPhone runs.
@@ -25,6 +27,7 @@ var _main: Node
 var _out := "user://visual_audit"
 var _bot_step := 1.5
 var _only: Array[int] = []
+var _msaa := false
 var _count := 0
 
 
@@ -34,9 +37,10 @@ func _ready() -> void:
 		_out = args[0]
 	if args.size() > 1:
 		_bot_step = float(args[1])
-	if args.size() > 2:
+	if args.size() > 2 and args[2] != "all":
 		for part in args[2].split(","):
 			_only.append(int(part))
+	_msaa = args.size() > 3 and args[3] == "msaa"
 	DirAccess.make_dir_recursive_absolute(_out)
 	_main = load("res://scenes/main.tscn").instantiate()
 	add_child(_main)
@@ -45,7 +49,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	await _frames(10)
-	get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+	get_viewport().msaa_3d = Viewport.MSAA_4X if _msaa else Viewport.MSAA_DISABLED
 	get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
 	RenderingServer.global_shader_parameter_set("gazer_debug_ids", 1)
 	_main.get_node("UI").visible = false
@@ -137,12 +141,25 @@ func _render(session: GameSession, world: WorldView, level: LevelData, pose: Arr
 		"tunnel_radius": level.tunnel_radius,
 		"shell_thickness": TunnelMath.WALL_THICKNESS,
 		"outline_width": TunnelMesher.OUTLINE_WIDTH,
+		"outline_max_screen": _floor_parameter(world, "outline_max_screen"),
+		"outline_min_pixels": _floor_parameter(world, "outline_min_pixels"),
+		"outline_max_width": _floor_parameter(world, "outline_max_width"),
+		"plain_distance": TunnelMesher.PLAIN_DISTANCE,
+		"msaa": get_viewport().msaa_3d != Viewport.MSAA_DISABLED,
 		"back_line": world.tunnel.wall_material.get_shader_parameter("back_line"),
 		"triangles": world.tunnel.triangle_count(),
 	}
 	var file := FileAccess.open(_out.path_join(name + ".json"), FileAccess.WRITE)
 	file.store_string(JSON.stringify(info, "  "))
 	_count += 1
+
+
+## A floor shader uniform, set or default.
+func _floor_parameter(world: WorldView, name: String) -> float:
+	var value = world.tunnel.floor_material.get_shader_parameter(name)
+	if value == null:
+		value = RenderingServer.shader_get_parameter_default(world.tunnel.floor_material.shader.get_rid(), name)
+	return float(value)
 
 
 func _first(level: LevelData, test: Callable) -> HoleData:

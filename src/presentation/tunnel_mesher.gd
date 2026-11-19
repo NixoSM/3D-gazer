@@ -12,9 +12,10 @@ extends RefCounted
 ## vertices exactly.
 ##
 ## How: the unrolled wall is a grid of COLUMNS around the tunnel and rows of
-## FINE metres along it. Cells far from any edge (checked on a coarse grid
-## of BAND rows, using how fast the distance field can change) become long
-## plain quads; cells near an edge are cut by marching squares, which puts
+## FINE metres along it. Cells beyond the outline's reach of any edge
+## (INK_REACH; checked on a coarse grid of BAND rows, using how fast the
+## distance field can change) become long plain quads, flat in edge
+## distance; cells nearer an edge are cut by marching squares, which puts
 ## a vertex where the field crosses zero on each grid edge. Every crossing
 ## is computed once per grid edge from the same two values, so neighbouring
 ## cells and neighbouring chunks meet exactly, without cracks or overlaps.
@@ -40,15 +41,35 @@ const FINE := 0.125
 const SUB_ROWS := 8
 const BAND := FINE * SUB_ROWS
 ## The floor's black outline: this many metres of floor along every edge.
-## Cells that may contain any of it are always refined.
 const OUTLINE_WIDTH := 0.25
+## tunnel_floor.gdshader keeps the outline at least a pixel and a half wide
+## far away, but never wider than this.
+const OUTLINE_MAX_WIDTH := OUTLINE_WIDTH * 1.6
+## The farthest from an edge that any ink can reach: the widest band plus
+## its soft inner side (at most half its width more). Cells that may
+## contain any floor this close to an edge are always refined, so there
+## the interpolated edge distance is the true one. Long plain strips only
+## cover floor further away than this: interpolating along them can be
+## wildly off (a strip from one hole's corner to the next carries a small
+## distance at both ends), but never down into the ink. Refining only up
+## to OUTLINE_WIDTH is what drew thin stray lines between hole corners.
+const INK_REACH := OUTLINE_MAX_WIDTH * 1.5
 ## Upper bound of |gradient| of floor_distance(). Each hole is a rounded
 ## box in skewed coordinates (at most sqrt(2)); the smooth union never
 ## exceeds the larger of its inputs. Used to prove a cell has no edge in it.
 const LIPSCHITZ := 1.42
-## Distances are clamped to this before they go into vertex data (far from
-## any hole the field is INF).
-const D_CLAMP := 8.0
+## The edge distance every vertex of a plain strip carries, instead of its
+## own. Every strip lies beyond INK_REACH (its vertices are at least
+## INK_REACH + fine_reach, so at least INK_REACH + 0.089, from an edge),
+## where the value has no use, and a constant makes every strip perfectly
+## flat. That matters twice. fwidth() reads a slope as "far away" and
+## widens the outline (strips once carried distances up to 8 m, with
+## steep fake slopes next to INF). And with MSAA a pixel that a sliver of
+## a strip only grazes is shaded at the pixel's centre, outside the
+## triangle, with the edge distance extrapolated: on a slope that dips into
+## the ink and leaves a faint dotted line along the strip. On a flat strip
+## it cannot. Cut cells carry their exact distances (always finite there).
+const PLAIN_DISTANCE := INK_REACH + 0.05
 
 ## A built chunk, ready to become an ArrayMesh (see to_mesh()).
 class Geometry:
@@ -142,9 +163,9 @@ func _build(level: LevelData, s0: float, s1: float, shell_thickness: float) -> G
 	var column_width := TAU * _radius / COLUMNS
 	var coarse_reach := LIPSCHITZ * 0.5 * sqrt(BAND * BAND + column_width * column_width)
 	var fine_reach := LIPSCHITZ * 0.5 * sqrt(FINE * FINE + column_width * column_width)
-	var coarse_floor := OUTLINE_WIDTH + coarse_reach
+	var coarse_floor := INK_REACH + coarse_reach
 	var coarse_void := -coarse_reach
-	var fine_floor := OUTLINE_WIDTH + fine_reach
+	var fine_floor := INK_REACH + fine_reach
 
 	for k in COLUMNS:
 		var k2 := (k + 1) % COLUMNS
@@ -254,7 +275,7 @@ func _line_rows(column: int, from: int, to: int) -> PackedInt32Array:
 
 func _floor_vertex_node(row: int, column: int) -> void:
 	_geometry.floor_vertices.append(_point_on_column(_row_s(row), column, _radius))
-	_geometry.floor_uvs.append(Vector2(clampf(_node(row, column), -D_CLAMP, D_CLAMP), 0.0))
+	_geometry.floor_uvs.append(Vector2(PLAIN_DISTANCE, 0.0))
 
 
 func _point_on_column(s: float, column: int, r: float) -> Vector3:
@@ -381,7 +402,7 @@ func _emit_piece(piece: Array) -> void:
 	var base := _geometry.floor_vertices.size()
 	for p: Point in piece:
 		_geometry.floor_vertices.append(_position(p, _radius))
-		_geometry.floor_uvs.append(Vector2(clampf(p.d, -D_CLAMP, D_CLAMP), 0.0))
+		_geometry.floor_uvs.append(Vector2(p.d, 0.0))
 	# Where an edge runs exactly through a grid node, a crossing lands on a
 	# corner: skip the triangles that collapse to a line or a point.
 	var v := _geometry.floor_vertices

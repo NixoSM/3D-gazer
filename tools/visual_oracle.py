@@ -12,11 +12,14 @@ It shares no code with the renderer: it does not use the meshes, the
 shaders or TunnelMesher, only the definition of the level. A see-through
 crack, a missing or stretched cut face, a black spike, a hole drawn in the
 wrong place or a chunk that was not built all show up as a cluster of
-wrong pixels, with what was drawn and what should have been.
+wrong pixels, with what was drawn and what should have been. Thin stray
+lines of ink on plain floor (often dotted, so no single cluster is big)
+are counted over the whole frame instead.
 
     python3 tools/visual_oracle.py <audit_dir> [--report <dir>] [--min-cluster 12]
 
-Exit status 1 if any frame has a cluster of wrong pixels.
+Exit status 1 if any frame has a cluster of wrong pixels, a pinhole or
+stray ink.
 """
 
 import argparse
@@ -54,6 +57,14 @@ BACKDROP_RADIUS = 200.0
 # two wide and deep in the fog, and the mesh's millimetres of difference
 # from the exact curve move sub-pixel slivers of void by a pixel.
 PINHOLE_RANGE = 60.0
+# The ID view counts a floor pixel as outline where the ink darkens it by more
+# than this (tunnel_floor.gdshader, INK_VISIBLE), so faint stray ink counts.
+INK_VISIBLE = 0.1
+# A frame fails with this many pixels of stray ink (see compare()).
+STRAY_INK = 4
+# The expected picture is ray-cast this many pixels beyond the frame, so
+# that an edge just off screen counts as near one at the border.
+BORDER = 6
 
 
 class Hole:
@@ -113,12 +124,14 @@ class Level:
         return d
 
 
-def camera_rays(info):
+def camera_rays(info, jitter=(0.0, 0.0), pad=0):
+    """One ray per pixel, through the pixel's centre moved by `jitter` pixels,
+    for the frame and `pad` pixels beyond it on every side."""
     width, height = info["size"]
     projection = np.array(info["projection"], dtype=np.float64).T  # columns -> matrix
     inverse = np.linalg.inv(projection)
-    xs = (np.arange(width) + 0.5) / width * 2.0 - 1.0
-    ys = 1.0 - (np.arange(height) + 0.5) / height * 2.0
+    xs = (np.arange(-pad, width + pad) + 0.5 + jitter[0]) / width * 2.0 - 1.0
+    ys = 1.0 - (np.arange(-pad, height + pad) + 0.5 + jitter[1]) / height * 2.0
     gx, gy = np.meshgrid(xs, ys)
     ndc = np.stack([gx, gy, np.full_like(gx, 0.5), np.ones_like(gx)], axis=-1).reshape(-1, 4)
     view = ndc @ inverse.T
@@ -150,9 +163,38 @@ def surface_coordinates(points):
     return s, angle, r
 
 
-def expected_ids(info, level):
-    """What each pixel should show, from the level definition alone."""
-    origin, directions = camera_rays(info)
+def ink(info, rays, d, shape):
+    """How much black ink covers each floor pixel, by the floor shader's own
+    rule (tunnel_floor.gdshader, ink()): a quarter metre of floor, at most a
+    share of the screen height, at least a pixel and a half, softened on the
+    inner side by up to a pixel. The rule needs how fast the edge distance
+    changes per pixel; here it comes from the true distance field (flat
+    beyond ink reach, as the mesh's plain strips are), differenced between
+    neighbouring pixels on the same surface, as the GPU's fwidth() would on
+    a perfect mesh."""
+    height_px = info["size"][1]
+    field = np.full(shape[0] * shape[1], np.nan)
+    field[rays] = np.minimum(d, info.get("plain_distance", info.get("edge_clamp", 8.0)))
+    field = field.reshape(shape)
+    dx = np.abs(np.diff(field, axis=1, append=np.nan))
+    dx = np.where(np.isnan(dx), np.abs(np.diff(field, axis=1, prepend=np.nan)), dx)
+    dy = np.abs(np.diff(field, axis=0, append=np.nan))
+    dy = np.where(np.isnan(dy), np.abs(np.diff(field, axis=0, prepend=np.nan)), dy)
+    per_pixel = np.maximum(np.nan_to_num(dx) + np.nan_to_num(dy), 0.00001).reshape(-1)[rays]
+    outline = info["outline_width"]
+    width = np.minimum(outline, info.get("outline_max_screen", 1.0) * height_px * per_pixel)
+    width = np.maximum(width, np.minimum(info.get("outline_min_pixels", 0.0) * per_pixel,
+                                         info.get("outline_max_width", outline * 1.6)))
+    soft = np.minimum(per_pixel, width * 0.5)
+    t = np.clip((d - (width - soft)) / np.maximum(2.0 * soft, 1e-9), 0.0, 1.0)
+    return 1.0 - t * t * (3.0 - 2.0 * t)
+
+
+def expected_ids(info, level, jitter=(0.0, 0.0), pad=0):
+    """What each pixel should show, from the level definition alone (and
+    `pad` pixels beyond the frame on every side)."""
+    origin, directions = camera_rays(info, jitter, pad)
+    shape = (info["size"][1] + 2 * pad, info["size"][0] + 2 * pad)
     radius = level.radius
     thickness = info["shell_thickness"]
     outline = info["outline_width"]
@@ -171,7 +213,8 @@ def expected_ids(info, level):
     rays, s, angle = rays[inside], s[inside], angle[inside]
     d = level.floor_distance(s, angle)
     solid = d >= 0.0
-    ids[rays[solid]] = np.where(d[solid] < outline, OUTLINE, FLOOR)
+    covered = ink(info, rays, d, shape) > INK_VISIBLE
+    ids[rays[solid]] = np.where(covered[solid], OUTLINE, FLOOR)
 
     # Through a hole: follow the ray out through the shell until it meets a
     # cut face (solid floor above it) or leaves the shell into the void.
@@ -206,9 +249,8 @@ def expected_ids(info, level):
             active[idx[met]] = False
     unknown = np.zeros(ids.shape, dtype=bool)
     unknown[open_rays[active]] = True  # never settled: excluded from the comparison
-    width, height = info["size"]
-    distance = np.minimum(t_floor, BACKDROP_RADIUS).reshape(height, width)
-    return ids.reshape(height, width), unknown.reshape(height, width), distance
+    distance = np.minimum(t_floor, BACKDROP_RADIUS).reshape(shape)
+    return ids.reshape(shape), unknown.reshape(shape), distance
 
 
 def rendered_ids(path):
@@ -220,21 +262,42 @@ def rendered_ids(path):
     return ids.reshape(pixels.shape[:2]).astype(np.int32)
 
 
-def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12):
+def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, msaa=False, may_be_void=None,
+            pad=0):
     """A rendered pixel is right if the expected ID map has its ID within
     `tolerance` pixels (edges can land a pixel either side). Returns the
     wrong-pixel mask and the clusters big enough to see, plus every pinhole:
     a pixel of void drawn where there is no void anywhere near (a crack in
     the floor or a cut face), which fails at any size because on the phone
-    it flickers as the tunnel moves."""
+    it flickers as the tunnel moves. `may_be_void` marks pixels that void
+    really covers part of (see subpixel_void()): there a sliver of void
+    thinner than a pixel may or may not land on the pixel's centre.
+
+    The expected maps (`expected`, `unknown`, `distance`, `may_be_void`)
+    reach `pad` pixels beyond the frame on every side, so that an edge just
+    off screen still counts as near one at the frame's border."""
+    def inner(a):
+        return a[pad:a.shape[0] - pad, pad:a.shape[1] - pad] if pad else a
+
     size = 2 * tolerance + 1
     footprint = np.ones((size, size), dtype=bool)
-    accept = np.zeros(expected.shape, dtype=bool)
+    accept = np.zeros(rendered.shape, dtype=bool)
     for material in range(BALL + 1):
-        near = ndimage.binary_dilation(expected == material, structure=footprint)
+        near = inner(ndimage.binary_dilation(expected == material, structure=footprint))
         accept |= near & (rendered == material)
-    near_unknown = ndimage.binary_dilation(unknown, structure=footprint)
+    near_unknown = inner(ndimage.binary_dilation(unknown, structure=footprint))
+    if msaa:
+        # With MSAA, pixels on an edge are a blend of the two sides: accept a
+        # blend only where two materials really meet.
+        edge = ndimage.maximum_filter(expected, footprint=footprint) != ndimage.minimum_filter(expected, footprint=footprint)
+        accept |= (rendered == FOREIGN) & inner(edge)
     wrong = ~accept & ~near_unknown
+    wide = np.ones((9, 9), dtype=bool)
+    plain = inner(~ndimage.binary_dilation((expected != FLOOR) | unknown, structure=wide))
+    void_near = inner(ndimage.binary_dilation(expected == VOID, structure=wide)) | near_unknown
+    if may_be_void is not None:
+        void_near |= inner(may_be_void)
+    expected, distance = inner(expected), inner(distance)
     labels, count = ndimage.label(wrong, structure=np.ones((3, 3), dtype=bool))
     clusters = []
     if count:
@@ -250,14 +313,35 @@ def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12):
                 "expected": NAMES[should],
             })
     clusters.sort(key=lambda c: -c["pixels"])
-    wide = np.ones((9, 9), dtype=bool)
-    void_near = ndimage.binary_dilation(expected == VOID, structure=wide) | near_unknown
+    # Stray ink: outline (or, with MSAA, a blend of it) drawn on floor with
+    # nothing but floor for 4 pixels around. It comes as thin, often dotted
+    # lines (each dot a cluster too small to count), which the eye still
+    # reads as black scratches, so it is counted over the whole frame.
+    stray = plain & (rendered != FLOOR) & (rendered != VOID)
+    if stray.sum() >= STRAY_INK:
+        ys, xs = np.nonzero(stray)
+        clusters.append({"pixels": int(ys.size), "box": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())],
+                         "drawn": "outline (stray ink)", "expected": "floor"})
     pinholes = wrong & (rendered == VOID) & ~void_near & (distance < PINHOLE_RANGE)
     ys, xs = np.nonzero(pinholes)
     for y, x in zip(ys, xs):
         clusters.append({"pixels": 1, "box": [int(x), int(y), int(x), int(y)], "drawn": "void (pinhole)",
                          "expected": NAMES[expected[y, x]]})
     return wrong, clusters
+
+
+def subpixel_void(info, level, pad=0):
+    """Pixels that void covers any part of (the view ray-cast again through
+    a 3 x 3 grid of points inside each pixel), and their neighbours: the
+    tip of a sliver of void thinner than a pixel, far away, can run a pixel
+    further on the mesh (its edges are chords of the true curve). A crack
+    in solid floor has no void anywhere near and is still a pinhole."""
+    covered = None
+    for jx in (-0.4, 0.0, 0.4):
+        for jy in (-0.4, 0.0, 0.4):
+            ids = expected_ids(info, level, (jx, jy), pad)[0] == VOID
+            covered = ids if covered is None else covered | ids
+    return ndimage.binary_dilation(covered, structure=np.ones((3, 3), dtype=bool))
 
 
 def id_image(ids):
@@ -303,9 +387,16 @@ def main():
         level_id = info["level"]
         if level_id not in levels:
             levels[level_id] = Level(os.path.join(args.levels, level_id + ".json"))
-        expected, unknown, distance = expected_ids(info, levels[level_id])
+        expected, unknown, distance = expected_ids(info, levels[level_id], pad=BORDER)
         rendered = rendered_ids(os.path.join(args.audit_dir, name + ".png"))
-        wrong, clusters = compare(expected, unknown, rendered, distance, args.tolerance, args.min_cluster)
+        msaa = info.get("msaa", False)
+        wrong, clusters = compare(expected, unknown, rendered, distance, args.tolerance, args.min_cluster,
+                                  msaa, pad=BORDER)
+        if any(c["drawn"] == "void (pinhole)" for c in clusters):
+            # Before calling a pixel of void a pinhole, make sure no sliver
+            # of real void crosses it off its centre.
+            wrong, clusters = compare(expected, unknown, rendered, distance, args.tolerance, args.min_cluster,
+                                      msaa, subpixel_void(info, levels[level_id], BORDER), BORDER)
         total_wrong += int(wrong.sum())
         summary.append({"frame": name, "wrong_pixels": int(wrong.sum()), "clusters": clusters})
         if clusters:
@@ -314,7 +405,8 @@ def main():
             print("FAIL %-32s %s" % (name, worst))
             if args.report:
                 os.makedirs(args.report, exist_ok=True)
-                save_report(os.path.join(args.report, name + ".png"), rendered, expected, wrong, clusters)
+                save_report(os.path.join(args.report, name + ".png"), rendered,
+                            expected[BORDER:-BORDER, BORDER:-BORDER], wrong, clusters)
     if args.report:
         os.makedirs(args.report, exist_ok=True)
         with open(os.path.join(args.report, "summary.json"), "w") as f:
