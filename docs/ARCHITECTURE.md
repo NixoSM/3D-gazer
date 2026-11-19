@@ -90,7 +90,15 @@ came from that, so it was replaced wholesale.)
   flat, so neither fwidth() nor MSAA's extrapolation at a strip's sliver
   edges can find ink in it. (Strips used to start at 0.38 m and carry
   their real distances; a strip from one hole's corner to the next then
-  drew a thin black line between them.)
+  drew a thin black line between them.) Cut cells' vertices also carry
+  the distance's gradient (UV2, central differences on the grid). Far
+  away the outline is a pixel and a half wide, so the shader needs how
+  fast the distance changes per pixel: it takes that from the gradient and
+  the pixel's step across the floor, not from fwidth(). Each triangle's own
+  slope jumps from one triangle to the next where the field curves (between
+  two holes' corners), and with MSAA it is read at the pixel's centre, off
+  the triangle: on the seven levels that broke the outline's soft inner
+  side into faint dotted grey lines.
 - **`TunnelView`** keeps chunks from one behind the camera to 150 m ahead.
   New chunks are built on worker threads (`WorkerThreadPool`), with the
   two nearest built on the spot if a worker is late. The first ten chunks
@@ -130,7 +138,14 @@ anywhere in a frame (outline drawn with nothing but floor for 4 pixels
 around: thin, often dotted lines that no single cluster would flag). It
 shares no code with the renderer. With `msaa` as the fourth argument the
 audit keeps the game's 4x MSAA on, and the oracle accepts blended pixels
-only where two materials really meet.
+only where two materials really meet. A sliver of void, cut face or back
+line thinner than a pixel (a cut face seen edge on) may or may not land on
+a pixel's centre, so the oracle accepts one wherever the exact view,
+ray-cast again through points inside each pixel, really has some; before
+calling a pixel of void a pinhole it also looks for real void in and
+beside that pixel on a grid a tenth of a pixel fine. A crack in solid
+floor has none and still fails (checked by painting fake pinholes, ink and
+cut faces into a clean frame).
 
 ```sh
 xvfb-run -a godot --rendering-driver vulkan --rendering-method mobile \
@@ -147,9 +162,9 @@ Mesa's software Vulkan driver (lavapipe), so the pictures are the iPhone's
 renderer, not an approximation. `tests/test_tunnel_mesher.gd` checks the
 same promises on the geometry itself, without rendering: the floor covers
 exactly the solid wall, it is watertight across cells and chunks, every
-hole edge has a cut face, the edge distance the outline is drawn from is
-the true one wherever ink can reach (and flat on every strip), and a
-chunk stays within its budget.
+hole edge has a cut face, the edge distance the outline is drawn from and
+its gradient are the true ones wherever ink can reach (and flat on every
+strip), and a chunk stays within its budget.
 
 The Mobile renderer is used on device. Every shader is unshaded with
 hand-written flat (cel) shading.

@@ -62,6 +62,9 @@ PINHOLE_RANGE = 60.0
 INK_VISIBLE = 0.1
 # A frame fails with this many pixels of stray ink (see compare()).
 STRAY_INK = 4
+# The edge distance's gradient is taken by central differences this far
+# apart, as TunnelMesher.SLOPE_STEP gives it to the floor's vertices.
+SLOPE_STEP = 1.0 / 256.0
 # The expected picture is ray-cast this many pixels beyond the frame, so
 # that an edge just off screen counts as near one at the border.
 BORDER = 6
@@ -128,11 +131,19 @@ def camera_rays(info, jitter=(0.0, 0.0), pad=0):
     """One ray per pixel, through the pixel's centre moved by `jitter` pixels,
     for the frame and `pad` pixels beyond it on every side."""
     width, height = info["size"]
+    gx, gy = np.meshgrid(np.arange(-pad, width + pad) + 0.5 + jitter[0],
+                         np.arange(-pad, height + pad) + 0.5 + jitter[1])
+    return pixel_rays(info, gx.reshape(-1), gy.reshape(-1))
+
+
+def pixel_rays(info, px, py):
+    """Rays through points of the frame, in pixels from its top left corner
+    (pixel (x, y) spans x..x+1, y..y+1)."""
+    width, height = info["size"]
     projection = np.array(info["projection"], dtype=np.float64).T  # columns -> matrix
     inverse = np.linalg.inv(projection)
-    xs = (np.arange(-pad, width + pad) + 0.5 + jitter[0]) / width * 2.0 - 1.0
-    ys = 1.0 - (np.arange(-pad, height + pad) + 0.5 + jitter[1]) / height * 2.0
-    gx, gy = np.meshgrid(xs, ys)
+    gx = np.asarray(px, dtype=np.float64) / width * 2.0 - 1.0
+    gy = 1.0 - np.asarray(py, dtype=np.float64) / height * 2.0
     ndc = np.stack([gx, gy, np.full_like(gx, 0.5), np.ones_like(gx)], axis=-1).reshape(-1, 4)
     view = ndc @ inverse.T
     view = view[:, :3] / view[:, 3:4]
@@ -163,24 +174,46 @@ def surface_coordinates(points):
     return s, angle, r
 
 
-def ink(info, rays, d, shape):
+def ink(info, level, rays, s, angle, d, shape):
     """How much black ink covers each floor pixel, by the floor shader's own
     rule (tunnel_floor.gdshader, ink()): a quarter metre of floor, at most a
     share of the screen height, at least a pixel and a half, softened on the
     inner side by up to a pixel. The rule needs how fast the edge distance
-    changes per pixel; here it comes from the true distance field (flat
-    beyond ink reach, as the mesh's plain strips are), differenced between
-    neighbouring pixels on the same surface, as the GPU's fwidth() would on
-    a perfect mesh."""
+    changes per pixel, which the shader works out as this does: the true
+    gradient of the distance field (TunnelMesher gives it to every vertex
+    within ink reach; plain floor beyond has none) along the pixel's step
+    across the floor to the next pixel."""
     height_px = info["size"][1]
-    field = np.full(shape[0] * shape[1], np.nan)
-    field[rays] = np.minimum(d, info.get("plain_distance", info.get("edge_clamp", 8.0)))
-    field = field.reshape(shape)
-    dx = np.abs(np.diff(field, axis=1, append=np.nan))
-    dx = np.where(np.isnan(dx), np.abs(np.diff(field, axis=1, prepend=np.nan)), dx)
-    dy = np.abs(np.diff(field, axis=0, append=np.nan))
-    dy = np.where(np.isnan(dy), np.abs(np.diff(field, axis=0, prepend=np.nan)), dy)
-    per_pixel = np.maximum(np.nan_to_num(dx) + np.nan_to_num(dy), 0.00001).reshape(-1)[rays]
+    radius = level.radius
+    grid_s = np.full(shape[0] * shape[1], np.nan)
+    grid_a = np.full(shape[0] * shape[1], np.nan)
+    grid_s[rays] = s
+    grid_a[rays] = angle
+    grid_s = grid_s.reshape(shape)
+    grid_a = grid_a.reshape(shape)
+
+    def step(axis):
+        # To the next pixel, or from the previous one at the stretch's end.
+        ds = np.diff(grid_s, axis=axis, append=np.nan)
+        da = np.diff(grid_a, axis=axis, append=np.nan)
+        back = np.isnan(ds)
+        ds = np.where(back, np.diff(grid_s, axis=axis, prepend=np.nan), ds)
+        da = np.where(back, np.diff(grid_a, axis=axis, prepend=np.nan), da)
+        da = (da + math.pi) % math.tau - math.pi
+        return np.nan_to_num(ds).reshape(-1)[rays], np.nan_to_num(da * radius).reshape(-1)[rays]
+
+    x_s, x_arc = step(1)
+    y_s, y_arc = step(0)
+    per_pixel = np.full(d.shape, 0.00001)
+    near = np.nonzero(d < info.get("plain_distance", 0.65))[0]
+    if near.size:
+        ns, na = s[near], angle[near]
+        turn = SLOPE_STEP / radius
+        g_s = (level.floor_distance(ns + SLOPE_STEP, na) - level.floor_distance(ns - SLOPE_STEP, na)) / (2 * SLOPE_STEP)
+        g_arc = (level.floor_distance(ns, np.mod(na + turn, math.tau))
+                 - level.floor_distance(ns, np.mod(na - turn, math.tau))) / (2 * SLOPE_STEP)
+        across = np.abs(g_s * x_s[near] + g_arc * x_arc[near]) + np.abs(g_s * y_s[near] + g_arc * y_arc[near])
+        per_pixel[near] = np.maximum(np.nan_to_num(across), 0.00001)
     outline = info["outline_width"]
     width = np.minimum(outline, info.get("outline_max_screen", 1.0) * height_px * per_pixel)
     width = np.maximum(width, np.minimum(info.get("outline_min_pixels", 0.0) * per_pixel,
@@ -195,6 +228,16 @@ def expected_ids(info, level, jitter=(0.0, 0.0), pad=0):
     `pad` pixels beyond the frame on every side)."""
     origin, directions = camera_rays(info, jitter, pad)
     shape = (info["size"][1] + 2 * pad, info["size"][0] + 2 * pad)
+    ids, unknown, t_floor = trace(info, level, origin, directions, shape)
+    distance = np.minimum(t_floor, BACKDROP_RADIUS).reshape(shape)
+    return ids.reshape(shape), unknown.reshape(shape), distance
+
+
+def trace(info, level, origin, directions, shape=None):
+    """What each ray should see. With `shape` (the rays are a frame's pixels,
+    row by row) the floor's ink is worked out too; without it, all floor
+    counts as FLOOR. Returns the IDs, the rays never settled, and how far
+    each ray runs to the floor's cylinder."""
     radius = level.radius
     thickness = info["shell_thickness"]
     outline = info["outline_width"]
@@ -213,8 +256,11 @@ def expected_ids(info, level, jitter=(0.0, 0.0), pad=0):
     rays, s, angle = rays[inside], s[inside], angle[inside]
     d = level.floor_distance(s, angle)
     solid = d >= 0.0
-    covered = ink(info, rays, d, shape) > INK_VISIBLE
-    ids[rays[solid]] = np.where(covered[solid], OUTLINE, FLOOR)
+    if shape is None:
+        ids[rays[solid]] = FLOOR
+    else:
+        covered = ink(info, level, rays, s, angle, d, shape) > INK_VISIBLE
+        ids[rays[solid]] = np.where(covered[solid], OUTLINE, FLOOR)
 
     # Through a hole: follow the ray out through the shell until it meets a
     # cut face (solid floor above it) or leaves the shell into the void.
@@ -249,8 +295,7 @@ def expected_ids(info, level, jitter=(0.0, 0.0), pad=0):
             active[idx[met]] = False
     unknown = np.zeros(ids.shape, dtype=bool)
     unknown[open_rays[active]] = True  # never settled: excluded from the comparison
-    distance = np.minimum(t_floor, BACKDROP_RADIUS).reshape(shape)
-    return ids.reshape(shape), unknown.reshape(shape), distance
+    return ids, unknown, t_floor
 
 
 def rendered_ids(path):
@@ -262,18 +307,19 @@ def rendered_ids(path):
     return ids.reshape(pixels.shape[:2]).astype(np.int32)
 
 
-def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, msaa=False, may_be_void=None,
+def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, msaa=False, may_be=None,
             pad=0):
     """A rendered pixel is right if the expected ID map has its ID within
     `tolerance` pixels (edges can land a pixel either side). Returns the
     wrong-pixel mask and the clusters big enough to see, plus every pinhole:
     a pixel of void drawn where there is no void anywhere near (a crack in
     the floor or a cut face), which fails at any size because on the phone
-    it flickers as the tunnel moves. `may_be_void` marks pixels that void
-    really covers part of (see subpixel_void()): there a sliver of void
-    thinner than a pixel may or may not land on the pixel's centre.
+    it flickers as the tunnel moves. `may_be` maps void, cut face and back
+    line to the pixels each really covers part of (see subpixel_ids()):
+    there a sliver thinner than a pixel may or may not land on the pixel's
+    centre, so the pixel may show it.
 
-    The expected maps (`expected`, `unknown`, `distance`, `may_be_void`)
+    The expected maps (`expected`, `unknown`, `distance`, `may_be`)
     reach `pad` pixels beyond the frame on every side, so that an edge just
     off screen still counts as near one at the frame's border."""
     def inner(a):
@@ -285,6 +331,9 @@ def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, 
     for material in range(BALL + 1):
         near = inner(ndimage.binary_dilation(expected == material, structure=footprint))
         accept |= near & (rendered == material)
+    if may_be is not None:
+        for material, covered in may_be.items():
+            accept |= inner(covered) & (rendered == material)
     near_unknown = inner(ndimage.binary_dilation(unknown, structure=footprint))
     if msaa:
         # With MSAA, pixels on an edge are a blend of the two sides: accept a
@@ -295,8 +344,8 @@ def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, 
     wide = np.ones((9, 9), dtype=bool)
     plain = inner(~ndimage.binary_dilation((expected != FLOOR) | unknown, structure=wide))
     void_near = inner(ndimage.binary_dilation(expected == VOID, structure=wide)) | near_unknown
-    if may_be_void is not None:
-        void_near |= inner(may_be_void)
+    if may_be is not None:
+        void_near |= inner(may_be[VOID])
     expected, distance = inner(expected), inner(distance)
     labels, count = ndimage.label(wrong, structure=np.ones((3, 3), dtype=bool))
     clusters = []
@@ -330,18 +379,37 @@ def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, 
     return wrong, clusters
 
 
-def subpixel_void(info, level, pad=0):
-    """Pixels that void covers any part of (the view ray-cast again through
-    a 3 x 3 grid of points inside each pixel), and their neighbours: the
-    tip of a sliver of void thinner than a pixel, far away, can run a pixel
-    further on the mesh (its edges are chords of the true curve). A crack
-    in solid floor has no void anywhere near and is still a pinhole."""
-    covered = None
+SUBPIXEL = (VOID, WALL, BACKLINE)
+
+
+def subpixel_ids(info, level, pad=0):
+    """For void, cut faces and back lines: the pixels each covers any part
+    of (the view ray-cast again through a 3 x 3 grid of points inside each
+    pixel), and their neighbours. A sliver thinner than a pixel may or may
+    not land on a pixel's centre, and far away, the mesh's edges being
+    chords of the true curve, its tip can run a pixel further. Seen edge on,
+    a cut face's back line is often such a sliver. A crack in solid floor
+    has no void anywhere near and is still a pinhole."""
+    covered = {}
     for jx in (-0.4, 0.0, 0.4):
         for jy in (-0.4, 0.0, 0.4):
-            ids = expected_ids(info, level, (jx, jy), pad)[0] == VOID
-            covered = ids if covered is None else covered | ids
-    return ndimage.binary_dilation(covered, structure=np.ones((3, 3), dtype=bool))
+            ids = expected_ids(info, level, (jx, jy), pad)[0]
+            for material in SUBPIXEL:
+                covered[material] = covered.get(material, False) | (ids == material)
+    return {m: ndimage.binary_dilation(c, structure=np.ones((3, 3), dtype=bool)) for m, c in covered.items()}
+
+
+def void_within(info, level, x, y, reach=1.0, samples=31):
+    """Whether real void covers any part of pixel (x, y) or of the pixels
+    within `reach` of it: the view ray-cast through a fine grid of points
+    over them (a tenth of a pixel apart). Along a back line, seen edge on,
+    the void beyond the shell can be a sliver too thin for subpixel_ids()'s
+    grid; the mesh's chords then show it a pixel off."""
+    grid = np.linspace(-reach, 1.0 + reach, samples)
+    gx, gy = np.meshgrid(x + grid, y + grid)
+    origin, directions = pixel_rays(info, gx.reshape(-1), gy.reshape(-1))
+    ids, unknown, _ = trace(info, level, origin, directions)
+    return bool((ids == VOID).any() or unknown.any())
 
 
 def id_image(ids):
@@ -392,11 +460,15 @@ def main():
         msaa = info.get("msaa", False)
         wrong, clusters = compare(expected, unknown, rendered, distance, args.tolerance, args.min_cluster,
                                   msaa, pad=BORDER)
-        if any(c["drawn"] == "void (pinhole)" for c in clusters):
-            # Before calling a pixel of void a pinhole, make sure no sliver
-            # of real void crosses it off its centre.
+        if any(c["drawn"] in ("void (pinhole)", NAMES[WALL], NAMES[BACKLINE]) for c in clusters):
+            # Before calling these wrong, make sure no sliver of the real
+            # thing crosses the pixel off its centre.
             wrong, clusters = compare(expected, unknown, rendered, distance, args.tolerance, args.min_cluster,
-                                      msaa, subpixel_void(info, levels[level_id], BORDER), BORDER)
+                                      msaa, subpixel_ids(info, levels[level_id], BORDER), BORDER)
+            # And a pinhole must be in solid floor or cut face for real:
+            # no void at all, looked for finely, in or right beside it.
+            clusters = [c for c in clusters if c["drawn"] != "void (pinhole)"
+                        or not void_within(info, levels[level_id], c["box"][0], c["box"][1], reach=0.5)]
         total_wrong += int(wrong.sum())
         summary.append({"frame": name, "wrong_pixels": int(wrong.sum()), "clusters": clusters})
         if clusters:

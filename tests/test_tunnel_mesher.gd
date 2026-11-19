@@ -8,8 +8,9 @@ extends TestCase
 ##     triangles except along the holes' edges and the ends of the stretch,
 ##     including where two chunks meet (no cracks, no T-junctions);
 ##   * every edge of every hole has a cut face welded to it;
-##   * the edge distance the floor shader draws the outline from is the
-##     true one wherever ink can reach (no stray black lines);
+##   * the edge distance the floor shader draws the outline from, and its
+##     gradient (how wide the outline is far away), are the true ones
+##     wherever ink can reach (no stray black lines);
 ##   * a chunk stays within its triangle and time budget.
 
 const ANGLE_BUCKETS := 64
@@ -224,6 +225,45 @@ func test_outline_comes_from_true_edge_distances() -> void:
 			if longest > TunnelMesher.BAND and not (uv[a].x == uv[b].x and uv[b].x == uv[c].x):
 				assert_true(false, "%.1f m long floor triangle with a sloped edge distance (%.3f, %.3f, %.3f) at s %.2f" % [longest, uv[a].x, uv[b].x, uv[c].x, -v[a].z])
 				return
+
+
+func test_outline_width_comes_from_true_gradients() -> void:
+	# Far away the outline is as wide as a pixel and a half of edge distance,
+	# so the shader needs how fast that distance changes per pixel. It takes
+	# the gradient each vertex carries (interpolated), not each triangle's
+	# own slope, which jumps between triangles where the field curves: with
+	# MSAA that drew faint dotted lines beside the outline. Wherever ink can
+	# reach, the interpolated gradient must be the field's.
+	var level := _level()
+	var step := 1.0 / 256.0
+	var checked := 0
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		var v := geometry.floor_vertices
+		var uv := geometry.floor_uvs
+		var slopes := geometry.floor_slopes
+		var idx := geometry.floor_indices
+		assert_eq(slopes.size(), v.size(), "a gradient for every floor vertex")
+		for i in range(0, idx.size(), 3):
+			var p := [v[idx[i]], v[idx[i + 1]], v[idx[i + 2]]]
+			var d := [uv[idx[i]].x, uv[idx[i + 1]].x, uv[idx[i + 2]].x]
+			var g := [slopes[idx[i]], slopes[idx[i + 1]], slopes[idx[i + 2]]]
+			for a in 5:
+				for b in 5 - a:
+					var c := 4 - a - b
+					var interpolated: float = (d[0] * a + d[1] * b + d[2] * c) / 4.0
+					if interpolated >= TunnelMesher.INK_REACH:
+						continue
+					var slope: Vector2 = (g[0] * a + g[1] * b + g[2] * c) / 4.0
+					var q := _surface((p[0] * a + p[1] * b + p[2] * c) / 4.0)
+					var turn := step / level.tunnel_radius
+					var truth := Vector2(
+						level.floor_distance(q.x + step, q.y) - level.floor_distance(q.x - step, q.y),
+						level.floor_distance(q.x, q.y + turn) - level.floor_distance(q.x, q.y - turn)) / (2.0 * step)
+					checked += 1
+					if slope.distance_to(truth) > 0.1:
+						assert_true(false, "gradient (%.2f, %.2f), truly (%.2f, %.2f) at s %.2f, angle %.1f°" % [slope.x, slope.y, truth.x, truth.y, q.x, rad_to_deg(q.y)])
+						return
+	assert_true(checked > 10000, "only %d samples near edges" % checked)
 
 
 func test_chunks_stay_within_budget() -> void:

@@ -167,8 +167,8 @@ was looking at screenshots. Now there are two automated ones:
 - `tests/test_tunnel_mesher.gd` (part of the test suite) checks the
   tunnel's geometry against the level definition: the floor covers exactly
   the solid wall, it is watertight across cells and chunks, every hole edge
-  has a cut face, the outline is drawn from true edge distances, a chunk
-  stays within its triangle budget.
+  has a cut face, the outline is drawn from true edge distances and
+  gradients, a chunk stays within its triangle budget.
 - The **pixel oracle** renders several hundred views of the seven levels (around
   every kind of hole, and along a bot's run) with each material drawn as a
   flat ID colour, then ray-casts the same views from the level file alone
@@ -178,7 +178,8 @@ was looking at screenshots. Now there are two automated ones:
   and writes side-by-side images of what was drawn and what should have
   been. The first version of the new tunnel had 140 one-pixel pinholes
   that no screenshot showed, then thin black lines between hole corners
-  that the first oracle missed; it finds both now, and both fixes are in.
+  that the first oracle missed, then (on the seven levels) faint dotted
+  lines beside far outlines; it finds all three now, and the fixes are in.
 
 ### Repository layout
 
