@@ -154,6 +154,7 @@ func _show_menu() -> void:
 			"completed": Progress.is_completed(levels[i].id),
 			"best_chain": Progress.best_chain(levels[i].id),
 		})
+	ScreenLayout.unlock()
 	menu.populate(entries)
 	menu.visible = true
 	hud.visible = false
@@ -178,6 +179,7 @@ func _begin_run() -> void:
 	world.reset_view()
 	world.tunnel.set_best_marker(_best_marker_s())
 	state = State.PLAYING
+	ScreenLayout.lock_for_play()
 	session.start_run()
 	hud.clear_spin()
 	hud.clear_hint()
@@ -193,12 +195,14 @@ func _pause() -> void:
 	state = State.PAUSED
 	get_tree().paused = true
 	pause_screen.visible = true
+	ScreenLayout.unlock()
 
 
 func _resume() -> void:
 	get_tree().paused = false
 	pause_screen.visible = false
 	state = State.PLAYING
+	ScreenLayout.lock_for_play()
 
 
 ## Fade out, reset, fade in, go. `immediate` skips the hold after a fall.
@@ -234,4 +238,5 @@ func _on_run_completed() -> void:
 	tween.tween_callback(func() -> void:
 		results.present(level.display_name, session.attempt, session.longest_chain, level_index + 1 < levels.size())
 		results.visible = true
-		hud.visible = false)
+		hud.visible = false
+		ScreenLayout.unlock())

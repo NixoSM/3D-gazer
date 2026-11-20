@@ -25,8 +25,10 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not enabled:
 		return
-	var height := get_viewport().get_visible_rect().size.y
-	if gestures.handle(event, height):
+	# Swipes are measured against the long side: the same physical swipe
+	# gives the same jump in portrait and landscape.
+	var view := get_viewport().get_visible_rect().size
+	if gestures.handle(event, maxf(view.x, view.y)):
 		get_viewport().set_input_as_handled()
 		return
 	# Desktop shortcuts mirror the touch gestures.

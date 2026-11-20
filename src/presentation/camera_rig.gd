@@ -23,6 +23,11 @@ extends Camera3D
 ## view only distorts more), up to `max_fov`.
 @export var fast_fov_per_speed := 0.5
 @export var max_fov := 98.0
+## In landscape, keeping the portrait's vertical angle would open the view
+## sideways to 107° at rest and over 135° at top speed: a fisheye. The
+## vertical angle is narrowed by aspect^-squeeze instead, which keeps the
+## ball, the floor ahead and the walls streaming past at the edges.
+@export var landscape_squeeze := 0.35
 ## Camera rumble from speed, in metres, reached at 24 m/s. Starts at 15 m/s.
 @export var speed_rumble := 0.022
 
@@ -63,7 +68,8 @@ func update_view(delta: float, s: float, angle: float, height: float, tunnel_rad
 	look_at_from_position(eye, target, TunnelMath.inward(angle))
 
 	_punch = lerpf(_punch, 0.0, 1.0 - exp(-7.0 * delta))
-	fov = fov_for_speed(speed) + _punch
+	var view := get_viewport().get_visible_rect().size
+	fov = fov_for_aspect(fov_for_speed(speed) + _punch, view.x / maxf(view.y, 1.0), landscape_squeeze)
 
 
 func fov_for_speed(speed: float) -> float:
@@ -72,6 +78,15 @@ func fov_for_speed(speed: float) -> float:
 		var knee_speed := 12.0 + (knee_fov - fov_at_12) / fov_per_speed
 		fov_now = knee_fov + (speed - knee_speed) * fast_fov_per_speed
 	return clampf(fov_now, fov_at_12, max_fov)
+
+
+## The vertical FOV to use on a screen of this aspect (width / height).
+## Portrait screens get the designed value unchanged.
+static func fov_for_aspect(tall_fov: float, aspect: float, squeeze: float) -> float:
+	if aspect <= 1.0:
+		return tall_fov
+	var half := tan(deg_to_rad(tall_fov) * 0.5) * pow(aspect, -squeeze)
+	return rad_to_deg(2.0 * atan(half))
 
 
 ## Brief FOV widening, for echo jumps.
