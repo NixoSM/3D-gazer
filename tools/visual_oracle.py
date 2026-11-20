@@ -60,7 +60,9 @@ PINHOLE_RANGE = 60.0
 # The ID view counts a floor pixel as outline where the ink darkens it by more
 # than this (tunnel_floor.gdshader, INK_VISIBLE), so faint stray ink counts.
 INK_VISIBLE = 0.1
-# A frame fails with this many pixels of stray ink (see compare()).
+# A frame fails with this many pixels of stray ink (see compare()). With
+# MSAA a pixel counts by the share of its samples that drew it: a pixel a
+# quarter covered is a quarter as dark, a quarter of a pixel of ink.
 STRAY_INK = 4
 # The edge distance's gradient is taken by central differences this far
 # apart, as TunnelMesher.SLOPE_STEP gives it to the floor's vertices.
@@ -299,16 +301,24 @@ def trace(info, level, origin, directions, shape=None):
 
 
 def rendered_ids(path):
+    """The rendered IDs, and how much of each pixel is not floor: the share
+    of its MSAA samples that drew something else (0 or 1 without MSAA). The
+    samples are blended in linear colour and stored as sRGB, so one sample
+    of four outline next to three of floor reads (137, 225, 0)."""
     pixels = np.asarray(Image.open(path).convert("RGB"), dtype=np.int32)
     flat = pixels.reshape(-1, 1, 3)
     distance = np.abs(flat - ID_COLORS[None, :, :]).sum(axis=2)
     ids = distance.argmin(axis=1)
     ids[distance.min(axis=1) > 60] = FOREIGN
-    return ids.reshape(pixels.shape[:2]).astype(np.int32)
+    c = pixels / 255.0
+    linear = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+    # Every other ID has red or blue where floor has none, or lacks its green.
+    not_floor = np.maximum(np.maximum(linear[..., 0], linear[..., 2]), 1.0 - linear[..., 1])
+    return ids.reshape(pixels.shape[:2]).astype(np.int32), not_floor
 
 
 def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, msaa=False, may_be=None,
-            pad=0):
+            pad=0, not_floor=None):
     """A rendered pixel is right if the expected ID map has its ID within
     `tolerance` pixels (edges can land a pixel either side). Returns the
     wrong-pixel mask and the clusters big enough to see, plus every pinhole:
@@ -317,7 +327,8 @@ def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, 
     it flickers as the tunnel moves. `may_be` maps void, cut face and back
     line to the pixels each really covers part of (see subpixel_ids()):
     there a sliver thinner than a pixel may or may not land on the pixel's
-    centre, so the pixel may show it.
+    centre, so the pixel may show it. `not_floor` is how much of each
+    pixel is not floor (see rendered_ids()), for weighing stray ink.
 
     The expected maps (`expected`, `unknown`, `distance`, `may_be`)
     reach `pad` pixels beyond the frame on every side, so that an edge just
@@ -365,11 +376,16 @@ def compare(expected, unknown, rendered, distance, tolerance=2, min_cluster=12, 
     # Stray ink: outline (or, with MSAA, a blend of it) drawn on floor with
     # nothing but floor for 4 pixels around. It comes as thin, often dotted
     # lines (each dot a cluster too small to count), which the eye still
-    # reads as black scratches, so it is counted over the whole frame.
+    # reads as black scratches, so it is counted over the whole frame. With
+    # MSAA it is weighed by how much of each pixel it covers: a sample's
+    # triangle is shaded at the pixel's centre, which can lie outside it, so
+    # far away, where the outline's soft side fades out over a pixel, a lone
+    # sample can tip over INK_VISIBLE. That pixel is a quarter covered.
     stray = plain & (rendered != FLOOR) & (rendered != VOID)
-    if stray.sum() >= STRAY_INK:
+    amount = float(stray.sum()) if not msaa or not_floor is None else float(not_floor[stray].sum())
+    if amount >= STRAY_INK:
         ys, xs = np.nonzero(stray)
-        clusters.append({"pixels": int(ys.size), "box": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())],
+        clusters.append({"pixels": int(round(amount)), "box": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())],
                          "drawn": "outline (stray ink)", "expected": "floor"})
     pinholes = wrong & (rendered == VOID) & ~void_near & (distance < PINHOLE_RANGE)
     ys, xs = np.nonzero(pinholes)
@@ -456,15 +472,15 @@ def main():
         if level_id not in levels:
             levels[level_id] = Level(os.path.join(args.levels, level_id + ".json"))
         expected, unknown, distance = expected_ids(info, levels[level_id], pad=BORDER)
-        rendered = rendered_ids(os.path.join(args.audit_dir, name + ".png"))
+        rendered, not_floor = rendered_ids(os.path.join(args.audit_dir, name + ".png"))
         msaa = info.get("msaa", False)
         wrong, clusters = compare(expected, unknown, rendered, distance, args.tolerance, args.min_cluster,
-                                  msaa, pad=BORDER)
+                                  msaa, pad=BORDER, not_floor=not_floor)
         if any(c["drawn"] in ("void (pinhole)", NAMES[WALL], NAMES[BACKLINE]) for c in clusters):
             # Before calling these wrong, make sure no sliver of the real
             # thing crosses the pixel off its centre.
             wrong, clusters = compare(expected, unknown, rendered, distance, args.tolerance, args.min_cluster,
-                                      msaa, subpixel_ids(info, levels[level_id], BORDER), BORDER)
+                                      msaa, subpixel_ids(info, levels[level_id], BORDER), BORDER, not_floor)
             # And a pinhole must be in solid floor or cut face for real:
             # no void at all, looked for finely, in or right beside it.
             clusters = [c for c in clusters if c["drawn"] != "void (pinhole)"

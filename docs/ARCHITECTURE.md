@@ -138,7 +138,11 @@ anywhere in a frame (outline drawn with nothing but floor for 4 pixels
 around: thin, often dotted lines that no single cluster would flag). It
 shares no code with the renderer. With `msaa` as the fourth argument the
 audit keeps the game's 4x MSAA on, and the oracle accepts blended pixels
-only where two materials really meet. A sliver of void, cut face or back
+only where two materials really meet. It then weighs stray ink by how much
+of each pixel it covers, so a pixel with one sample in four inked counts as
+a quarter of a pixel: MSAA shades a sample's triangle at the pixel's
+centre, which can lie outside the triangle, and far away a lone sample on
+the outline's faint soft side can tip over the 10% bar. A sliver of void, cut face or back
 line thinner than a pixel (a cut face seen edge on) may or may not land on
 a pixel's centre, so the oracle accepts one wherever the exact view,
 ray-cast again through points inside each pixel, really has some; before
