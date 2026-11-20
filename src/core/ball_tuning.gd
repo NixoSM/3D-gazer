@@ -35,24 +35,38 @@ extends Resource
 ## A swipe this close (s) before landing is remembered and fired on landing.
 @export var jump_buffer_time: float = 0.12
 
-@export_group("Echo")
-## A tap this long (s) before landing queues an echo jump.
-@export var echo_buffer_time: float = 0.2
-## A tap this long (s) after landing still counts as an echo.
-@export var echo_grace_time: float = 0.1
-## Taps within this window (s) of touchdown count as "perfect".
-@export var perfect_window: float = 0.06
-## Hit-stop: on an echo the world freezes this long (s) before the ball
-## leaves the ground, while the shockwave keeps spreading. A swipe during
-## the freeze sets the echo's height (and ends the freeze at once).
-@export_range(0.0, 0.4) var echo_freeze_time: float = 0.14
-## While the finger is still down (maybe mid-swipe) the hit-stop may stretch
-## up to this long (s) to let the swipe finish.
-@export_range(0.0, 0.6) var echo_freeze_max: float = 0.3
-## An echo throws away the ball's sideways momentum, so whatever the player
-## tilts during the hit-stop takes over at once: the ball leaves the ground
-## moving sideways at this speed (m/s) times the tilt (0 = straight up).
-@export_range(0.0, 10.0) var echo_redirect_speed: float = 4.0
+@export_group("Smash")
+## Swipe down in the air: the ball hangs this long (s) before it dives, the
+## wind-up that makes the hit read. Short, or the input feels late.
+@export_range(0.0, 0.2) var smash_windup_time: float = 0.045
+## No wind-up when the ball would land within this long (s) anyway.
+@export var smash_windup_skip: float = 0.14
+## Speed (m/s) the ball shoots down at; gravity adds to it.
+@export var smash_speed: float = 34.0
+## Share of sideways speed (relative to the spin) the dive keeps: low = a
+## straight plunge onto the spot under the ball.
+@export_range(0.0, 1.0) var smash_lateral_keep: float = 0.35
+## A smash started at least this share of the jump's height up counts as
+## "from the top": a bigger hit.
+@export_range(0.0, 1.0) var smash_top_fraction: float = 0.7
+## A swipe down this long (s) after an ordinary landing still bounces.
+@export var smash_grace_time: float = 0.1
+## Hit-stop: on impact the world freezes this long (s) before the bounce,
+## while the shockwave keeps spreading. A swipe up during it sets the
+## bounce's height (and ends the freeze at once).
+@export_range(0.0, 0.4) var smash_freeze_time: float = 0.11
+## While a finger is down (maybe mid-swipe) the hit-stop may stretch up to
+## this long (s) to let the swipe finish.
+@export_range(0.0, 0.6) var smash_freeze_max: float = 0.3
+## The bounce throws away the ball's sideways momentum, so whatever the
+## player tilts during the hit-stop takes over at once: the ball leaves the
+## ground moving sideways at this speed (m/s) times the tilt.
+@export_range(0.0, 10.0) var smash_redirect_speed: float = 4.0
+## The trade-off: each smash adds this share of the level's speed, for the
+## rest of the run (so smashing makes landings easy and the run faster).
+@export_range(0.0, 0.3) var smash_speed_gain: float = 0.04
+## Forward speed never goes past the level's times this.
+@export_range(1.0, 3.0) var smash_speed_max: float = 1.6
 
 @export_group("Holes")
 ## Metres of forgiveness at hole edges: the ball keeps its footing until its

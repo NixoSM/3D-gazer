@@ -11,7 +11,7 @@ extends PanelContainer
 signal run_ended(fell: bool, s: float, angle: float)
 
 const HINT_IDLE := "PREVIEW — hover the strip to look from there"
-const HINT_PLAY := "A/D tilt · W hop · Space big jump · E echo · Esc stop"
+const HINT_PLAY := "A/D tilt · W hop · Space big jump · S smash · Esc stop"
 
 var session: GameSession
 var world: WorldView

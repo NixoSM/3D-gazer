@@ -39,7 +39,7 @@ func _ready() -> void:
 	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.add_child(gap)
-	for line in ["tilt to roll", "swipe up to jump", "tap as you land to echo"]:
+	for line in ["tilt to roll", "swipe up to jump", "swipe down to smash"]:
 		var hint := UiStyle.caption(line, 24)
 		layout.add_child(hint)
 
@@ -80,7 +80,7 @@ func _row(index: int, info: Dictionary) -> Control:
 	if not info["unlocked"]:
 		status = "finish the one above"
 	elif info["completed"]:
-		status = "complete" + (" · best echo ×%d" % info["best_chain"] if info["best_chain"] > 1 else "")
+		status = "complete" + (" · best smash ×%d" % info["best_chain"] if info["best_chain"] > 1 else "")
 	elif info["best"] > 0.0:
 		status = "best %d%%" % int(info["best"] * 100.0)
 	else:

@@ -1,11 +1,12 @@
 class_name GestureRecognizer
 extends RefCounted
-## Turns raw touches into the game's two gestures: *swipe up* and *tap*.
+## Turns raw touches into the game's two gestures: *swipe up* and *swipe down*.
 ##
-## * A tap fires on touch-down, not release: echo timing is about rhythm,
-##   and waiting for the finger to lift would add ~80 ms of lag.
 ## * A swipe up fires on release with a strength proportional to its length,
 ##   or early as soon as it reaches full length, so long swipes feel instant.
+## * A swipe down (the smash) has no size: it fires the moment the finger has
+##   travelled SMASH_SWIPE downwards, mid-drag, never waiting for the lift.
+##   The smash is about timing, and every frame of lag would blunt it.
 ## Distances are fractions of the screen height, so any device size works.
 
 ## Swipes shorter than this (fraction of screen height) are ignored.
@@ -14,8 +15,11 @@ const MIN_SWIPE := 0.035
 const FULL_SWIPE := 0.28
 ## Swipes must be mostly vertical: |dx| <= dy * this.
 const MAX_SLANT := 1.1
+## A downward drag this long (fraction of screen height) is a smash.
+const SMASH_SWIPE := 0.03
 
-var tapped := false
+## True once per swipe down.
+var smashed := false
 ## Strength of a completed swipe in [0, 1], or -1.
 var swipe_strength := -1.0
 
@@ -31,15 +35,18 @@ func handle(event: InputEvent, screen_height: float) -> bool:
 			_active_index = event.index
 			_start = event.position
 			_fired = false
-			tapped = true
 			return true
 		if not event.pressed and event.index == _active_index:
+			if not _fired:
+				_try_smash(event.position, screen_height)
 			if not _fired:
 				_try_swipe(event.position, screen_height, false)
 			_active_index = -1
 			return true
 	elif event is InputEventScreenDrag and event.index == _active_index and not _fired:
-		_try_swipe(event.position, screen_height, true)
+		_try_smash(event.position, screen_height)
+		if not _fired:
+			_try_swipe(event.position, screen_height, true)
 		return true
 	return false
 
@@ -51,7 +58,7 @@ func is_holding() -> bool:
 
 ## Clears the one-shot gestures once they have been handed to the simulation.
 func consume() -> void:
-	tapped = false
+	smashed = false
 	swipe_strength = -1.0
 
 
@@ -64,4 +71,13 @@ func _try_swipe(position: Vector2, screen_height: float, only_if_full: bool) -> 
 	if only_if_full and strength < 1.0:
 		return
 	swipe_strength = strength
+	_fired = true
+
+
+func _try_smash(position: Vector2, screen_height: float) -> void:
+	var down := (position.y - _start.y) / screen_height
+	var side := absf(position.x - _start.x) / screen_height
+	if down < SMASH_SWIPE or side > down * MAX_SLANT:
+		return
+	smashed = true
 	_fired = true

@@ -34,8 +34,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		gestures.swipe_strength = 0.45
 	elif event.is_action_pressed(&"jump_big"):
 		gestures.swipe_strength = 1.0
-	elif event.is_action_pressed(&"echo"):
-		gestures.tapped = true
+	elif event.is_action_pressed(&"smash"):
+		gestures.smashed = true
 
 
 func set_level_here() -> float:
@@ -52,7 +52,7 @@ func current_tilt() -> float:
 
 ## The next InputFrame. One-shot gestures are consumed by this call.
 func take_frame() -> InputFrame:
-	var frame := InputFrame.new(_tilt, gestures.swipe_strength if enabled else -1.0, gestures.tapped and enabled)
+	var frame := InputFrame.new(_tilt, gestures.swipe_strength if enabled else -1.0, gestures.smashed and enabled)
 	frame.holding = enabled and gestures.is_holding()
 	gestures.consume()
 	return frame
@@ -66,7 +66,7 @@ func _register_desktop_actions() -> void:
 		&"tilt_right": [KEY_D, KEY_RIGHT],
 		&"jump_small": [KEY_W, KEY_UP],
 		&"jump_big": [KEY_SPACE],
-		&"echo": [KEY_E, KEY_SHIFT],
+		&"smash": [KEY_S, KEY_DOWN, KEY_E, KEY_SHIFT],
 		&"pause": [KEY_ESCAPE, KEY_P],
 	}
 	for action in bindings:

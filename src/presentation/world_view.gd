@@ -81,11 +81,12 @@ func _process(delta: float) -> void:
 	var height := session.view_height
 	var progress := level.progress_at(s)
 	var frozen := sim.phase == BallSimulation.Phase.FALLING
-	# During the echo hit-stop everything holds still except the shockwave.
+	# During the smash's hit-stop everything holds still except the shockwave.
 	var held := sim.phase == BallSimulation.Phase.FROZEN
 
-	var speed := level.speed_at(s)
+	var speed := level.speed_at(s) * sim.speed_boost
 	camera.update_view(delta, s, angle, height, level.tunnel_radius, speed, frozen or held)
+	_shape_smash(sim, height, held)
 	ball.update_view(delta, s, angle, height, level.tunnel_radius,
 		0.0 if held else sim.forward_speed, 0.0 if held else sim.lateral_speed)
 	tunnel.update_view(camera.global_position.z * -1.0, s, angle, height, _time)
@@ -99,3 +100,20 @@ func _process(delta: float) -> void:
 	_backdrop_material.set_shader_parameter("fade_color", void_color)
 	_environment.background_color = void_color
 	ball.set_fade(fade, void_color)
+
+
+## The smash's shapes: coiled in the wind-up, stretched with a smear while
+## it dives, pressed flat through the hit-stop.
+func _shape_smash(sim: BallSimulation, height: float, held: bool) -> void:
+	if sim.smash_stage == 1:
+		ball.hold_squash(0.74)
+		ball.set_smear(0.0)
+	elif sim.smash_stage == 2:
+		ball.hold_squash(1.55)
+		ball.set_smear(minf(sim.smash_drop_so_far(), 3.0))
+	elif held:
+		ball.hold_squash(0.58)
+		ball.set_smear(0.0)
+	else:
+		ball.hold_squash(1.0)
+		ball.set_smear(0.0)

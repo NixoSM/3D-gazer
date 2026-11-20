@@ -19,12 +19,16 @@ extends RefCounted
 ## Ground spin (LevelData.spin) carries everything inside the tunnel
 ## sideways, always in the direction the level sets.
 ##
-## An echo starts with a hit-stop (Phase.FROZEN): the ball holds still on
-## the floor for tuning.echo_freeze_time, then jumps. A swipe during the
-## freeze replaces the echo's height, so a player can reshape the rhythm;
-## while a finger is still down the freeze waits for it, up to
-## tuning.echo_freeze_max. The echo also throws away sideways momentum:
-## the ball takes off in whatever direction the phone is tilted.
+## The smash: a swipe down while in the air after a jump. The ball coils
+## for an instant (tuning.smash_windup_time, skipped when it is about to land
+## anyway), then dives at tuning.smash_speed. On impact the world holds still
+## (Phase.FROZEN, the hit-stop) and the ball bounces back up to the height of
+## the jump it came from, so smashes can be chained at one height. A swipe
+## up during the hit-stop replaces the bounce's height; while a finger is
+## still down the hit-stop waits for it, up to tuning.smash_freeze_max. The
+## bounce also throws away sideways momentum: the ball takes off in whatever
+## direction the phone is tilted. A swipe down just after an ordinary
+## landing (tuning.smash_grace_time) still bounces, from the floor.
 ##
 ## Call step() at a fixed rate with an InputFrame; it returns the events that
 ## happened during that step. No signals, no nodes, no randomness: the same
@@ -34,13 +38,16 @@ extends RefCounted
 enum Phase { ROLLING, AIRBORNE, FALLING, FINISHED, FROZEN }
 
 enum EventType {
-	JUMPED,        ## Left the ground. data: height, echo, perfect, chain
-	LANDED,        ## Touched down safely. data: echo, height = impact speed (m/s)
-	CHAIN_BROKEN,  ## Landed and the echo window closed without a tap. data: chain
+	JUMPED,        ## Left the ground. data: height, bounce, perfect, chain
+	LANDED,        ## Touched down safely. data: bounce, height = impact speed (m/s)
+	CHAIN_BROKEN,  ## Landed and the smash window closed without a smash. data: chain
 	FELL,          ## Lost into a hole.
 	FINISHED,      ## Reached the end of the tunnel.
 	BUMPED,        ## Hit the wall of a hole. data: height = impact speed (m/s)
-	ECHO_HIT,      ## An echo tap connected; the hit-stop starts. data: perfect, chain (the coming one)
+	SMASH_COILED,  ## A swipe down was accepted: the wind-up starts. data: height = ball height
+	SMASH_DIVED,   ## The ball shoots down. data: height = ball height
+	SMASH_HIT,     ## The smash hit the floor; the hit-stop starts. data: height = drop (m),
+	               ## perfect = smashed from the top of the arc, chain (the coming one)
 }
 
 ## The run is lost once the ball's centre is this far below the lip of a hole.
@@ -54,7 +61,7 @@ class SimEvent:
 	var s: float
 	var angle: float
 	var height: float = 0.0
-	var echo: bool = false
+	var bounce: bool = false
 	var perfect: bool = false
 	var chain: int = 0
 
@@ -83,19 +90,29 @@ var lateral_speed: float = 0.0
 var vertical_speed: float = 0.0
 ## Seconds since the run started.
 var time: float = 0.0
-## Height of the last jump: what an echo repeats.
+## Height of the last jump: what a smash bounces back up to.
 var last_jump_height: float = 0.0
-## Consecutive echo jumps.
-var echo_chain: int = 0
+## Consecutive smash bounces.
+var smash_chain: int = 0
+## Every smash speeds the ball up for the rest of the run: the price of the
+## easy landing, and the way to a faster time. Forward speed = level speed × this.
+var speed_boost: float = 1.0
+## Smashes this run.
+var smash_count: int = 0
+## 0 = no smash, 1 = coiling (wind-up), 2 = diving.
+var smash_stage: int = 0
 
-var _echo_queued: bool = false
-var _echo_queued_perfect: bool = false
+## True while airborne from a jump (not from rolling off an edge).
+var _can_smash: bool = false
+var _smash_timer: float = 0.0
+var _smash_from: float = 0.0
+var _smash_top: bool = false
 var _buffered_jump_strength: float = -1.0
 var _time_since_landing: float = INF
 var _landing_resolved: bool = true
 ## Seconds since the ground went from under a rolling ball (INF = it did not).
 var _time_unsupported: float = INF
-## Tilt of the current step, for the echo's take-off direction.
+## Tilt of the current step, for the bounce's take-off direction.
 var _tilt: float = 0.0
 var _freeze_left: float = 0.0
 var _freeze_elapsed: float = 0.0
@@ -118,9 +135,14 @@ func reset(start_angle: float = 0.0) -> void:
 	vertical_speed = 0.0
 	time = 0.0
 	last_jump_height = 0.0
-	echo_chain = 0
-	_echo_queued = false
-	_echo_queued_perfect = false
+	smash_chain = 0
+	smash_stage = 0
+	speed_boost = 1.0
+	smash_count = 0
+	_can_smash = false
+	_smash_timer = 0.0
+	_smash_from = 0.0
+	_smash_top = false
 	_buffered_jump_strength = -1.0
 	_time_since_landing = INF
 	_landing_resolved = true
@@ -136,7 +158,7 @@ func reset(start_angle: float = 0.0) -> void:
 func place(start_s: float, start_angle: float = 0.0) -> void:
 	reset(start_angle)
 	s = clampf(start_s, 0.0, level.length)
-	forward_speed = level.speed_at(s)
+	forward_speed = level.speed_at(s) * speed_boost
 
 
 func progress() -> float:
@@ -168,6 +190,11 @@ func time_to_land() -> float:
 		return 0.0
 	var g := tuning.gravity
 	return (vertical_speed + sqrt(vertical_speed * vertical_speed + 2.0 * g * maxf(height, 0.0))) / g
+
+
+## How far (m) the diving ball has dropped since the dive began (0 otherwise).
+func smash_drop_so_far() -> float:
+	return maxf(_smash_from - height, 0.0) if smash_stage == 2 else 0.0
 
 
 ## Jump height (m) produced by a swipe of the given strength in [0, 1].
@@ -208,7 +235,7 @@ func _step_forward(dt: float) -> void:
 	# While alive, forward speed is the level's: the player never controls it.
 	# Once lost, the ball is a free body (walls can bounce it back).
 	if phase in [Phase.ROLLING, Phase.AIRBORNE]:
-		forward_speed = level.speed_at(s)
+		forward_speed = level.speed_at(s) * speed_boost
 	s += forward_speed * dt
 
 
@@ -244,13 +271,13 @@ func _step_rolling(dt: float, input: InputFrame, events: Array[SimEvent]) -> voi
 		return
 
 	_time_since_landing += dt
-	if not _landing_resolved and _time_since_landing > tuning.echo_grace_time:
+	if not _landing_resolved and _time_since_landing > tuning.smash_grace_time:
 		_landing_resolved = true
-		if echo_chain > 0:
+		if smash_chain > 0:
 			var broken := SimEvent.new(EventType.CHAIN_BROKEN, s, angle)
-			broken.chain = echo_chain
+			broken.chain = smash_chain
 			events.append(broken)
-		echo_chain = 0
+		smash_chain = 0
 
 	if _over_void():
 		# The ground is gone: start to drop. Gravity and the cut decide the rest.
@@ -259,17 +286,18 @@ func _step_rolling(dt: float, input: InputFrame, events: Array[SimEvent]) -> voi
 		_time_unsupported = 0.0
 
 
-## Jumps and echoes that need the ball to be on (or just off) the ground.
+## Jumps and smashes that need the ball to be on (or just off) the ground.
 ## Returns true if the ball jumped.
 func _ground_actions(input: InputFrame, events: Array[SimEvent]) -> bool:
-	var in_grace := not _landing_resolved and _time_since_landing <= tuning.echo_grace_time
-	if input.tap and in_grace and last_jump_height > 0.0:
+	var in_grace := not _landing_resolved and _time_since_landing <= tuning.smash_grace_time
+	if input.smash and in_grace and last_jump_height > 0.0 and phase == Phase.ROLLING:
+		# A hair late: the landing becomes the smash's impact.
 		_landing_resolved = true
-		_start_echo(_time_since_landing <= tuning.perfect_window, events)
+		_impact(0.0, false, events)
 		return true
 	if input.has_jump():
 		_landing_resolved = true
-		echo_chain = 0
+		smash_chain = 0
 		_jump(jump_height_for_strength(input.jump_strength), false, false, events)
 		return true
 	return false
@@ -282,15 +310,21 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 		if _ground_actions(input, events):
 			return
 
+	if input.smash and _can_smash and smash_stage == 0 and height > 0.0:
+		_start_smash(events)
 	var landing_in := time_to_land()
-	if input.tap and last_jump_height > 0.0 and not _echo_queued and landing_in <= tuning.echo_buffer_time:
-		_echo_queued = true
-		_echo_queued_perfect = landing_in <= tuning.perfect_window
-	if input.has_jump() and landing_in <= tuning.jump_buffer_time:
+	if input.has_jump() and landing_in <= tuning.jump_buffer_time and smash_stage == 0:
 		_buffered_jump_strength = input.jump_strength
 
-	vertical_speed -= tuning.gravity * dt
-	height += vertical_speed * dt
+	if smash_stage == 1:
+		# The wind-up: the ball hangs for an instant before it shoots down.
+		_smash_timer -= dt
+		vertical_speed = 0.0
+		if _smash_timer <= 0.0:
+			_dive(events)
+	else:
+		vertical_speed -= tuning.gravity * dt
+		height += vertical_speed * dt
 
 	if _over_void():
 		# No floor under the centre: the ball keeps dropping, and only the
@@ -313,20 +347,21 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 	vertical_speed = 0.0
 	_time_unsupported = INF
 
+	var smashing := smash_stage == 2
+	_can_smash = false
+	smash_stage = 0
 	var landed := SimEvent.new(EventType.LANDED, s, angle)
 	landed.height = impact
-	landed.echo = _echo_queued
-	landed.chain = echo_chain
+	landed.bounce = smashing
+	landed.chain = smash_chain
 	events.append(landed)
 
-	if _echo_queued:
-		var perfect := _echo_queued_perfect
-		_echo_queued = false
-		_start_echo(perfect, events)
+	if smashing:
+		_impact(_smash_from, _smash_top, events)
 	elif _buffered_jump_strength >= 0.0:
 		var strength := _buffered_jump_strength
 		_buffered_jump_strength = -1.0
-		echo_chain = 0
+		smash_chain = 0
 		_jump(jump_height_for_strength(strength), false, false, events)
 	else:
 		phase = Phase.ROLLING
@@ -334,22 +369,53 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 		_landing_resolved = false
 
 
-## The echo's hit-stop: on the floor, nothing moves. A swipe ends it early
-## and sets the height; otherwise the last jump is repeated when it ends.
-func _start_echo(perfect: bool, events: Array[SimEvent]) -> void:
+## A swipe down in the air: coil, unless the ball is about to land anyway
+## (then the wind-up would only delay a landing the player asked to hurry).
+func _start_smash(events: Array[SimEvent]) -> void:
+	_buffered_jump_strength = -1.0
+	# From the top: near the apex, where the arc has the most to give.
+	_smash_top = height >= last_jump_height * tuning.smash_top_fraction
+	var coiled := SimEvent.new(EventType.SMASH_COILED, s, angle)
+	coiled.height = height
+	events.append(coiled)
+	if tuning.smash_windup_time > 0.0 and time_to_land() > tuning.smash_windup_skip:
+		smash_stage = 1
+		_smash_timer = tuning.smash_windup_time
+		vertical_speed = 0.0
+	else:
+		_dive(events)
+
+
+func _dive(events: Array[SimEvent]) -> void:
+	smash_stage = 2
+	_smash_from = height
+	vertical_speed = minf(vertical_speed, -tuning.smash_speed)
+	# Straight down: the ball stops drifting relative to the turning tunnel.
+	lateral_speed = spin_speed() + (lateral_speed - spin_speed()) * tuning.smash_lateral_keep
+	var dived := SimEvent.new(EventType.SMASH_DIVED, s, angle)
+	dived.height = height
+	events.append(dived)
+
+
+## The smash hits the floor: the hit-stop, where nothing moves. A swipe up
+## ends it early and sets the bounce's height; otherwise the ball bounces
+## back to the height of the jump it came from.
+func _impact(drop: float, top: bool, events: Array[SimEvent]) -> void:
 	phase = Phase.FROZEN
 	height = 0.0
 	vertical_speed = 0.0
-	_freeze_left = tuning.echo_freeze_time
+	_freeze_left = tuning.smash_freeze_time
 	_freeze_elapsed = 0.0
-	_freeze_perfect = perfect
-	var hit := SimEvent.new(EventType.ECHO_HIT, s, angle)
-	hit.perfect = perfect
-	hit.chain = echo_chain + 1
-	hit.height = last_jump_height
+	_freeze_perfect = top
+	smash_count += 1
+	speed_boost = minf(speed_boost + tuning.smash_speed_gain, tuning.smash_speed_max)
+	var hit := SimEvent.new(EventType.SMASH_HIT, s, angle)
+	hit.perfect = top
+	hit.chain = smash_chain + 1
+	hit.height = drop
 	events.append(hit)
 	if _freeze_left <= 0.0:
-		_jump(last_jump_height, true, perfect, events)
+		_jump(last_jump_height, true, top, events)
 
 
 func _step_frozen(dt: float, input: InputFrame, events: Array[SimEvent]) -> void:
@@ -359,7 +425,7 @@ func _step_frozen(dt: float, input: InputFrame, events: Array[SimEvent]) -> void
 		_jump(jump_height_for_strength(input.jump_strength), true, _freeze_perfect, events)
 		return
 	# A finger still down may be the start of a swipe: wait for it, a little.
-	var waiting_for_swipe := input.holding and _freeze_elapsed < tuning.echo_freeze_max
+	var waiting_for_swipe := input.holding and _freeze_elapsed < tuning.smash_freeze_max
 	if _freeze_left <= 0.0 and not waiting_for_swipe:
 		_jump(last_jump_height, true, _freeze_perfect, events)
 
@@ -394,24 +460,26 @@ func _step_finished(_dt: float) -> void:
 			vertical_speed = 0.0
 
 
-func _jump(jump_height: float, echo: bool, perfect: bool, events: Array[SimEvent]) -> void:
+func _jump(jump_height: float, bounce: bool, perfect: bool, events: Array[SimEvent]) -> void:
 	# Never let a jump hit the ceiling: the far wall is 2R away.
 	var ceiling := 2.0 * level.tunnel_radius - 2.0 * tuning.ball_radius - 0.3
 	jump_height = minf(jump_height, ceiling)
 	last_jump_height = jump_height
-	if echo:
-		echo_chain += 1
+	if bounce:
+		smash_chain += 1
 		# A clean slate sideways: the ball leaves in the direction of the tilt.
-		lateral_speed = _tilt * tuning.echo_redirect_speed
+		lateral_speed = _tilt * tuning.smash_redirect_speed
 	phase = Phase.AIRBORNE
+	_can_smash = true
+	smash_stage = 0
 	vertical_speed = sqrt(2.0 * tuning.gravity * jump_height)
 	_buffered_jump_strength = -1.0
 	_time_unsupported = INF
 	var jumped := SimEvent.new(EventType.JUMPED, s, angle)
 	jumped.height = jump_height
-	jumped.echo = echo
+	jumped.bounce = bounce
 	jumped.perfect = perfect
-	jumped.chain = echo_chain
+	jumped.chain = smash_chain
 	events.append(jumped)
 
 
@@ -422,7 +490,8 @@ func _over_void() -> bool:
 
 func _lose(events: Array[SimEvent]) -> void:
 	phase = Phase.FALLING
-	echo_chain = 0
+	smash_chain = 0
+	smash_stage = 0
 	events.append(SimEvent.new(EventType.FELL, s, angle))
 
 

@@ -45,7 +45,13 @@ func _ready() -> void:
 	layout.add_child(menu)
 
 
-func present(level_name: String, attempts: int, longest_chain: int, has_next: bool) -> void:
+func present(level_name: String, attempts: int, longest_chain: int, has_next: bool,
+		seconds: float = INF, best: float = INF, fastest: bool = false) -> void:
 	_title.text = level_name
-	_stats.text = "attempts %d\nlongest echo ×%d" % [attempts, longest_chain]
+	var lines := []
+	if seconds < INF:
+		lines.append("time %.2f s%s" % [seconds, "  · new best" if fastest else ("  · best %.2f" % best if best < INF else "")])
+	lines.append("attempts %d" % attempts)
+	lines.append("longest smash ×%d" % longest_chain)
+	_stats.text = "\n".join(lines)
 	_next.visible = has_next

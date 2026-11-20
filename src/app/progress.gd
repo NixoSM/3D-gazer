@@ -19,6 +19,20 @@ func is_completed(level_id: String) -> bool:
 	return _config.get_value(level_id, "completed", false)
 
 
+## Fastest finish (s), or INF if never finished.
+func best_time(level_id: String) -> float:
+	return _config.get_value(level_id, "best_time", INF)
+
+
+## Stores a finish time. Returns true if it is the fastest yet.
+func record_time(level_id: String, seconds: float) -> bool:
+	if seconds >= best_time(level_id):
+		return false
+	_config.set_value(level_id, "best_time", seconds)
+	_config.save(PATH)
+	return true
+
+
 func best_chain(level_id: String) -> int:
 	return _config.get_value(level_id, "best_chain", 0)
 

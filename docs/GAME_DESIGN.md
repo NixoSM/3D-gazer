@@ -14,8 +14,9 @@ values quoted here are the defaults at the time of writing.
 2. **Physical, readable motion.** Tilt is a slope, not a joystick. The ball
    accelerates, coasts and slows like a ball on a tilted plane, only
    quicker than real physics allows, so it can carve sharp lines.
-3. **Rhythm is rewarded.** The echo turns jumping into a beat: swipe once,
-   then tap on each landing. Good timing is felt in light, sound and touch.
+3. **Rhythm is rewarded.** The smash turns jumping into a beat: swipe up
+   once, then slam down and bounce. Each hit is felt in light, sound and
+   touch, and each one speeds the run up.
 4. **Colour is progress.** No progress bar. The tunnel's palette moves from
    start to finish and the next colour is always visible ahead.
 
@@ -25,7 +26,7 @@ values quoted here are the defaults at the time of writing.
 |---|---|
 | Tilt left/right | Lateral acceleration proportional to tilt, 30 m/s² at full tilt (`BallTuning.steering_acceleration`; a real ball rolling down a 32° slope manages ~13). Rolling resistance decays lateral speed exponentially (`2.4/s`), so releasing the tilt lets the ball coast briefly, then settle. Lateral speed is capped at 13 m/s; airborne, the ball keeps 70% of tilt authority. The ball was made this quick on purpose, to leave room for harder, flashier levels. |
 | Swipe up | Jump. Height scales with swipe length: 3.5% of the screen height is the minimum swipe (0.7 m), 28% is a full swipe (3.4 m). Long swipes fire as soon as they reach full length; others fire on release. |
-| Tap while landing | **Echo**: repeat the last jump exactly. Accepted from 0.20 s before touchdown to 0.10 s after. Within 0.06 s of touchdown it is **perfect**. Taps register on touch-down, not release, because timing matters. The echo lands with a **hit-stop**: the world freezes for 0.14 s while the shockwave keeps spreading, so the player registers the hit. A swipe during the freeze replaces the echo's height (and ends the freeze at once); while a finger is still down the freeze waits for it, up to 0.30 s. The echo also **resets sideways momentum**: the ball takes off sideways at 4 m/s times the tilt held at that moment, so a tilt during the freeze acts at once instead of fighting the old drift. |
+| Swipe down in the air | **Smash** (replaced the tap-on-landing echo, November 2026). Only after a jump or a bounce. It fires mid-drag, as soon as the finger has gone 3% of the screen height down. The ball coils for 0.045 s (skipped if it would land within 0.14 s anyway) with a forward flip, then dives at 34 m/s with a smear behind it. The impact is a **hit-stop**: the world freezes for 0.11 s, the ball is pressed flat, the camera is knocked down and shaken, the floor tiles light up in a double wave, a boom plays with the chain's note and a heavy haptic fires. The bigger the drop, the bigger the hit; from the top of the arc (70% of the jump's height or more) it is a notch bigger again. Then the ball **bounces back up to the height of the jump it came from**, so smashes chain at one height. A swipe up during the hit-stop replaces the bounce's height. The bounce **resets sideways momentum** (it takes off at 4 m/s times the tilt). A swipe down up to 0.10 s after an ordinary landing still bounces. **Trade-off**: every smash adds 4% of the level's speed for the rest of the run (up to +60%), so smashing makes landings easy but the run faster; the results screen shows the finish time and the best time. |
 
 Tilt is the roll angle `atan2(x, |(y, z)|)` of the gravity vector, which
 does not change when the player tips the phone towards themselves. Level is
@@ -114,6 +115,13 @@ for, at any speed; the builder also knows the ball's physics (how long a
 jump of each size is in the air, how far the spin carries an echo), so
 landings are placed where a player's jump actually comes down.
 
+The levels were written for the old echo (tap on landing to repeat the
+jump). A smash timed just before the landing does what the echo did, but
+every smash now also speeds the run up, so the "echo runs" below are
+tighter than they were authored. Nicola asked (November 2026) not to
+re-check or retune the levels after the smash change; the bot tests that
+prove every level can be finished fail on some levels since then.
+
 | # | Level | Speed (m/s) | Spin (°/s) | The idea |
 |---|---|---|---|---|
 | 1 | **Lemonade** | 20 to 24 | none, then 12 to 16 | The first level: every mechanic introduced once, repeated once, then combined (lean, big and small jumps, steering in the air, echo, aimed echo, leaning against the spin). Short hints name each one the moment the layout asks for it. |
@@ -179,12 +187,18 @@ All of it lives in `EffectsDirector`, `BallView`, `CameraRig` and the shaders.
 
 - Normal landing: deliberately sober. The ball squashes, a soft thud, a
   light haptic, nothing on the floor.
-- Echo: the hit-stop, then a wave spreads *over the cylinder* and lights up
-  whole floor tiles as it reaches them (accent colour, black seams),
-  wrapping around the tunnel to meet itself on the far side. The ball flashes in the accent colour, the FOV kicks, a
-  glassy note plays (D-major pentatonic, one step higher per echo in the
-  chain) and a medium haptic fires. A perfect echo adds a bell overtone, a
-  brighter wave and a heavy haptic. (No streak counter or PERFECT popup:
+- Smash, in three beats. **Coil**: the ball squashes and flips forward, a
+  rising zip and a light haptic confirm the swipe at once. **Dive**: the
+  ball stretches tall with a smear of flat accent-coloured copies trailing
+  up the drop, and a falling whistle. **Impact**, on the hit-stop: the ball
+  is pressed flat and flashes white, the camera drops towards the floor
+  and springs back with a shake, the FOV snaps in, a wave spreads *over
+  the cylinder* lighting up whole floor tiles (accent colour, black seams)
+  with an aftershock wave a beat behind, and a sub boom with a crack plays
+  under a glassy note (D-major pentatonic, one step higher per smash in
+  the chain; a bell overtone from the top of the arc). All of it scales
+  with the drop and the chain. The bounce then stretches the ball, widens
+  the FOV and plays a short boing. (No streak counter or PERFECT popup:
   they were removed as noise.)
 - Jump: stretch, plus a soft whoosh pitched by height.
 - Fall: a falling tone, a small camera shake, a heavy haptic, then a fade.

@@ -40,52 +40,6 @@ func test_jump_reaches_requested_height() -> void:
 	assert_near(peak, sim.last_jump_height, 0.08)
 
 
-func test_tap_just_before_landing_echoes_same_jump() -> void:
-	var sim := BallSimulation.new(make_level(), make_tuning())
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.6))
-	var height := sim.last_jump_height
-	while sim.time_to_land() > 0.04:
-		sim.step(1.0 / 120.0, InputFrame.new())
-	var events := sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	events.append_array(run(sim, 0.3))
-	var echoes := events.filter(func(e: BallSimulation.SimEvent) -> bool: return e.type == E.JUMPED and e.echo)
-	assert_eq(echoes.size(), 1, "one echo jump")
-	assert_true(echoes[0].perfect, "tap 40 ms before touchdown is perfect")
-	assert_near(sim.last_jump_height, height, 0.0001, "echo repeats the same height")
-	assert_eq(sim.echo_chain, 1)
-
-
-func test_tap_just_after_landing_still_echoes() -> void:
-	var sim := BallSimulation.new(make_level(), make_tuning())
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.3))
-	while sim.phase == BallSimulation.Phase.AIRBORNE:
-		sim.step(1.0 / 120.0, InputFrame.new())
-	run(sim, 0.05)
-	var events := sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	assert_eq(count(events, E.ECHO_HIT), 1)
-	events.append_array(run(sim, 0.3))
-	assert_eq(count(events, E.JUMPED), 1)
-
-
-func test_late_tap_does_nothing_and_breaks_chain() -> void:
-	var sim := BallSimulation.new(make_level(), make_tuning())
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.3))
-	while sim.phase == BallSimulation.Phase.AIRBORNE:
-		sim.step(1.0 / 120.0, InputFrame.new())
-	run(sim, 0.4)
-	var events := sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	assert_eq(count(events, E.JUMPED), 0)
-	assert_eq(sim.echo_chain, 0)
-
-
-func test_early_tap_mid_air_is_ignored() -> void:
-	var sim := BallSimulation.new(make_level(), make_tuning())
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 1.0))
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	var events := run(sim, 1.5)
-	assert_eq(count(events, E.JUMPED), 0, "tapping right after take-off must not queue an echo")
-
-
 func test_rolling_into_a_hole_falls() -> void:
 	var holes: Array[HoleData] = [HoleData.new(20.0, 6.0, 0.0, deg_to_rad(90.0))]
 	var sim := BallSimulation.new(make_level(holes), make_tuning())
@@ -147,39 +101,6 @@ func test_counter_tilt_holds_against_spin() -> void:
 	var tilt := -flow * tuning.rolling_resistance / tuning.steering_acceleration
 	run(sim, 4.0, InputFrame.new(tilt))
 	assert_true(absf(sim.lateral_speed) < 0.05, "balanced: lateral speed %.3f" % sim.lateral_speed)
-
-
-func test_echo_never_changes_the_spin() -> void:
-	var sim := BallSimulation.new(spin_level(20.0), make_tuning())
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.6))
-	while sim.time_to_land() > 0.04:
-		sim.step(1.0 / 120.0, InputFrame.new())
-	var events: Array = sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	events.append_array(run(sim, 0.3))
-	var echoes := events.filter(func(e: BallSimulation.SimEvent) -> bool: return e.type == E.JUMPED and e.echo)
-	assert_eq(echoes.size(), 1)
-	assert_near(sim.spin_rate(), 20.0, 0.001)
-
-
-## An echo throws away sideways momentum: the tilt held during the
-## hit-stop decides where the ball goes, at once.
-func test_echo_takes_off_in_the_direction_of_the_tilt() -> void:
-	var tuning := make_tuning()
-	var sim := BallSimulation.new(make_level(), tuning)
-	# Build up speed to the right, then jump.
-	run(sim, 1.0, InputFrame.new(1.0))
-	sim.step(1.0 / 120.0, InputFrame.new(1.0, 0.6))
-	while sim.time_to_land() > 0.04:
-		sim.step(1.0 / 120.0, InputFrame.new(1.0))
-	assert_true(sim.lateral_speed > 5.0, "moving right fast (%.1f m/s)" % sim.lateral_speed)
-	sim.step(1.0 / 120.0, InputFrame.new(1.0, -1.0, true))
-	while sim.phase != BallSimulation.Phase.FROZEN:
-		sim.step(1.0 / 120.0, InputFrame.new(1.0))
-	# During the freeze the player tilts left.
-	while sim.phase == BallSimulation.Phase.FROZEN:
-		sim.step(1.0 / 120.0, InputFrame.new(-1.0))
-	assert_true(sim.lateral_speed < 0.0, "the ball now heads left (%.2f m/s)" % sim.lateral_speed)
-	assert_near(sim.lateral_speed, -tuning.echo_redirect_speed, 0.5)
 
 
 ## The fall must never put the ball inside the shell around a hole, however
@@ -268,53 +189,161 @@ static func _penetration(sim: BallSimulation, _hole: HoleData, tuning: BallTunin
 	return worst
 
 
-func test_echo_freezes_the_ball_then_jumps() -> void:
+static func smash() -> InputFrame:
+	return InputFrame.new(0.0, -1.0, true)
+
+
+## Jumps, rises to `fraction` of the way up, then swipes down. Returns the
+## events from the swipe on.
+func _smash_at(sim: BallSimulation, strength: float, fraction: float) -> Array:
+	sim.step(1.0 / 120.0, InputFrame.new(0.0, strength))
+	while sim.vertical_speed > 0.0 and sim.height < sim.last_jump_height * fraction:
+		sim.step(1.0 / 120.0, InputFrame.new())
+	return sim.step(1.0 / 120.0, smash())
+
+
+func test_smash_dives_and_bounces_back_to_the_jump_height() -> void:
 	var tuning := make_tuning()
 	var sim := BallSimulation.new(make_level(), tuning)
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.6))
-	while sim.time_to_land() > 0.03:
+	var events := _smash_at(sim, 0.6, 0.5)
+	var height := sim.last_jump_height
+	var hit_at := -1.0
+	var start := sim.time
+	while sim.phase != BallSimulation.Phase.FROZEN:
+		events.append_array(sim.step(1.0 / 120.0, InputFrame.new()))
+	hit_at = sim.time - start
+	assert_eq(count(events, E.SMASH_COILED), 1)
+	assert_eq(count(events, E.SMASH_DIVED), 1)
+	assert_eq(count(events, E.SMASH_HIT), 1)
+	# From half a 2 m jump a free fall takes ~0.24 s; the smash much less.
+	assert_true(hit_at < tuning.smash_windup_time + 0.08, "the smash is quick (%.3f s)" % hit_at)
+	events = run(sim, 0.3)
+	var bounces := events.filter(func(e: BallSimulation.SimEvent) -> bool: return e.type == E.JUMPED and e.bounce)
+	assert_eq(bounces.size(), 1, "then it bounces")
+	assert_near(sim.last_jump_height, height, 0.0001, "back to the height of the jump")
+	var peak := 0.0
+	while sim.phase == BallSimulation.Phase.AIRBORNE:
+		sim.step(1.0 / 240.0, InputFrame.new())
+		peak = maxf(peak, sim.height)
+	assert_near(peak, height, 0.1)
+
+
+func test_smashes_chain_at_one_height() -> void:
+	var sim := BallSimulation.new(make_level(), make_tuning())
+	_smash_at(sim, 1.0, 0.9)
+	var height := sim.last_jump_height
+	for i in 3:
+		while not (sim.phase == BallSimulation.Phase.AIRBORNE and sim.smash_stage == 0 and sim.vertical_speed <= 0.0):
+			sim.step(1.0 / 120.0, InputFrame.new())
+		sim.step(1.0 / 120.0, smash())
+	run(sim, 0.4)
+	assert_eq(sim.smash_chain, 4)
+	assert_near(sim.last_jump_height, height, 0.0001)
+
+
+func test_swipe_down_on_the_ground_does_nothing() -> void:
+	var sim := BallSimulation.new(make_level(), make_tuning())
+	var events := run(sim, 0.5, smash())
+	assert_eq(count(events, E.SMASH_COILED), 0)
+	assert_eq(count(events, E.JUMPED), 0)
+
+
+func test_swipe_down_just_after_landing_still_bounces() -> void:
+	var sim := BallSimulation.new(make_level(), make_tuning())
+	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.3))
+	while sim.phase == BallSimulation.Phase.AIRBORNE:
 		sim.step(1.0 / 120.0, InputFrame.new())
-	var events: Array = sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	events.append_array(run(sim, 0.05))
-	assert_eq(count(events, E.ECHO_HIT), 1, "the echo connects on landing")
-	assert_eq(sim.phase, BallSimulation.Phase.FROZEN)
+	run(sim, 0.05)
+	var events := sim.step(1.0 / 120.0, smash())
+	assert_eq(count(events, E.SMASH_HIT), 1)
+	events.append_array(run(sim, 0.3))
+	assert_eq(count(events, E.JUMPED), 1)
+
+
+func test_late_swipe_down_does_nothing_and_breaks_chain() -> void:
+	var sim := BallSimulation.new(make_level(), make_tuning())
+	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.3))
+	while sim.phase == BallSimulation.Phase.AIRBORNE:
+		sim.step(1.0 / 120.0, InputFrame.new())
+	run(sim, 0.4)
+	var events := sim.step(1.0 / 120.0, smash())
+	assert_eq(count(events, E.JUMPED), 0)
+	assert_eq(sim.smash_chain, 0)
+
+
+func test_no_smash_after_rolling_off_an_edge() -> void:
+	var holes: Array[HoleData] = [HoleData.new(10.0, 20.0, 0.0, TAU)]
+	var sim := BallSimulation.new(make_level(holes), make_tuning())
+	while sim.phase == BallSimulation.Phase.ROLLING:
+		sim.step(1.0 / 120.0, InputFrame.new())
+	var events := run(sim, 0.2, smash())
+	assert_eq(count(events, E.SMASH_COILED), 0, "a smash needs a jump first")
+
+
+func test_smash_never_changes_the_spin() -> void:
+	var sim := BallSimulation.new(spin_level(20.0), make_tuning())
+	_smash_at(sim, 0.6, 0.8)
+	var events := run(sim, 0.5)
+	assert_eq(count(events, E.SMASH_HIT), 1)
+	assert_near(sim.spin_rate(), 20.0, 0.001)
+
+
+## The bounce throws away sideways momentum: the tilt held during the
+## hit-stop decides where the ball goes, at once.
+func test_bounce_takes_off_in_the_direction_of_the_tilt() -> void:
+	var tuning := make_tuning()
+	var sim := BallSimulation.new(make_level(), tuning)
+	run(sim, 1.0, InputFrame.new(1.0))
+	sim.step(1.0 / 120.0, InputFrame.new(1.0, 0.6))
+	while sim.time_to_land() > 0.04:
+		sim.step(1.0 / 120.0, InputFrame.new(1.0))
+	assert_true(sim.lateral_speed > 5.0, "moving right fast (%.1f m/s)" % sim.lateral_speed)
+	sim.step(1.0 / 120.0, InputFrame.new(1.0, -1.0, true))
+	while sim.phase != BallSimulation.Phase.FROZEN:
+		sim.step(1.0 / 120.0, InputFrame.new(1.0))
+	while sim.phase == BallSimulation.Phase.FROZEN:
+		sim.step(1.0 / 120.0, InputFrame.new(-1.0))
+	assert_true(sim.lateral_speed < 0.0, "the ball now heads left (%.2f m/s)" % sim.lateral_speed)
+	assert_near(sim.lateral_speed, -tuning.smash_redirect_speed, 0.5)
+
+
+func test_hit_stop_freezes_the_ball_then_bounces() -> void:
+	var tuning := make_tuning()
+	var sim := BallSimulation.new(make_level(), tuning)
+	_smash_at(sim, 0.6, 0.9)
+	while sim.phase != BallSimulation.Phase.FROZEN:
+		sim.step(1.0 / 120.0, InputFrame.new())
 	var held := sim.s
-	run(sim, tuning.echo_freeze_time * 0.5)
+	run(sim, tuning.smash_freeze_time * 0.5)
 	assert_eq(sim.s, held, "nothing moves during the hit-stop")
-	events = run(sim, tuning.echo_freeze_time)
-	assert_eq(count(events, E.JUMPED), 1, "then the echo jump fires")
+	var events := run(sim, tuning.smash_freeze_time)
+	assert_eq(count(events, E.JUMPED), 1, "then the bounce fires")
 	assert_true(sim.s > held)
 
 
-func test_swipe_during_the_freeze_sets_the_echo_height() -> void:
+func test_swipe_up_during_the_hit_stop_sets_the_bounce_height() -> void:
 	var tuning := make_tuning()
 	var sim := BallSimulation.new(make_level(), tuning)
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.3))
+	var _e := _smash_at(sim, 0.3, 0.9)
 	var low := sim.last_jump_height
-	while sim.time_to_land() > 0.03:
+	while sim.phase != BallSimulation.Phase.FROZEN:
 		sim.step(1.0 / 120.0, InputFrame.new())
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	run(sim, 0.05)
-	assert_eq(sim.phase, BallSimulation.Phase.FROZEN)
 	var events := sim.step(1.0 / 120.0, InputFrame.new(0.0, 1.0))
 	assert_eq(count(events, E.JUMPED), 1, "the swipe ends the freeze at once")
-	assert_true(events[0].echo, "and it still counts as an echo")
-	assert_near(sim.last_jump_height, tuning.max_jump_height, 0.001)
+	assert_true(events[0].bounce, "and it still counts as a bounce")
 	assert_true(sim.last_jump_height > low + 1.0)
-	assert_eq(sim.echo_chain, 1)
+	assert_eq(sim.smash_chain, 1)
 
 
-func test_freeze_waits_for_a_finger_that_is_still_down() -> void:
+func test_hit_stop_waits_for_a_finger_that_is_still_down() -> void:
 	var tuning := make_tuning()
 	var sim := BallSimulation.new(make_level(), tuning)
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, 0.3))
-	while sim.time_to_land() > 0.03:
+	_smash_at(sim, 0.3, 0.9)
+	while sim.phase != BallSimulation.Phase.FROZEN:
 		sim.step(1.0 / 120.0, InputFrame.new())
-	sim.step(1.0 / 120.0, InputFrame.new(0.0, -1.0, true))
-	run(sim, 0.05)
 	var holding := InputFrame.new()
 	holding.holding = true
-	run(sim, tuning.echo_freeze_time + 0.05, holding)
+	run(sim, tuning.smash_freeze_time + 0.05, holding)
 	assert_eq(sim.phase, BallSimulation.Phase.FROZEN, "still waiting for the swipe")
-	run(sim, tuning.echo_freeze_max, holding)
+	run(sim, tuning.smash_freeze_max, holding)
 	assert_eq(sim.phase, BallSimulation.Phase.AIRBORNE, "but never longer than the limit")

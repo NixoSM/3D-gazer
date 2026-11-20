@@ -22,12 +22,13 @@ extends RefCounted
 ##     ball comes down and how far sideways it can steer in the air, and
 ##     picks the landing that leaves the most floor around it. It takes off
 ##     when "now" is the best take-off point.
-##   * Echo: just before touchdown, if the floor after the landing runs out
-##     again soon, it taps when the repeated jump lands well, or swipes a
-##     different size (re-shaping the jump) when that lands better.
+##   * Smash: just before touchdown, if the floor after the landing runs out
+##     again soon, it swipes down (the bounce repeats the jump's height) when
+##     that lands well, or swipes a different size (re-shaping the jump) when
+##     that lands better.
 ##
 ## `steering_delay` makes it react late, like a person: its steering uses
-## what it saw that long ago. Jumps and taps are not delayed (players
+## what it saw that long ago. Jumps and smashes are not delayed (players
 ## anticipate those from what is coming, they do not react to them).
 ##
 ## The `*_noise`/`*_jitter` settings make it imperfect in seeded, repeatable
@@ -96,6 +97,8 @@ var _fire_wait := 0.0
 var _tap_offset := 0.0
 var _late_tap := -1.0
 var _late_tap_strength := -1.0
+## The run's speed-up from smashes (BallSimulation.speed_boost).
+var _boost := 1.0
 
 
 func _init(p_level: LevelData, p_tuning: BallTuning) -> void:
@@ -104,6 +107,7 @@ func _init(p_level: LevelData, p_tuning: BallTuning) -> void:
 
 
 func decide(sim: BallSimulation) -> InputFrame:
+	_boost = sim.speed_boost
 	if not _noise_ready:
 		_noise_ready = true
 		_rng.seed = noise_seed
@@ -124,7 +128,7 @@ func decide(sim: BallSimulation) -> InputFrame:
 			if _late_tap_strength >= 0.0:
 				frame.jump_strength = _late_tap_strength
 			else:
-				frame.tap = true
+				frame.smash = true
 			_late_tap_strength = -1.0
 
 	# --- Jumps: plan one before the floor we can roll on runs out ----------------
@@ -508,7 +512,7 @@ func _plan_jump(sim: BallSimulation, gap: Vector2) -> Dictionary:
 ## reachable by rolling lasts over a second, or some floor after its end is
 ## within reach of a full jump (steering all the way, carried by the spin).
 func _continues(s: float, angle: float) -> bool:
-	var v := level.speed_at(s)
+	var v := _speed_at(s)
 	var gap := _dead_end(s, angle, v, v * 1.2)
 	if gap.x == INF:
 		return true
@@ -551,14 +555,14 @@ func _score_jump(sim: BallSimulation, s_t: float, angle_t: float, lateral: float
 		gap: Vector2, series: bool, echo: bool) -> Dictionary:
 	var height := minf(sim.jump_height_for_strength(strength), 2.0 * level.tunnel_radius - 2.0 * tuning.ball_radius - 0.3)
 	var air := 2.0 * sqrt(2.0 * height / tuning.gravity)
-	var v := level.speed_at(s_t + level.speed_at(s_t) * air * 0.5)
+	var v := _speed_at(s_t + _speed_at(s_t) * air * 0.5)
 	var s_l := s_t + v * air
 	if s_l < gap.y + 0.3:
 		return {}
 	var k := tuning.rolling_resistance
 	var flow := level.spin_speed_at(s_t)
-	# An echo throws the sideways speed away: the ball leaves at most
-	# echo_redirect_speed sideways, the way the phone is tilted.
+	# A bounce throws the sideways speed away: the ball leaves at most
+	# smash_redirect_speed sideways, the way the phone is tilted.
 	var start_lateral := 0.0 if echo else lateral
 	var decay := 1.0 - exp(-k * air)
 	var drift := flow * air + (start_lateral - flow) * decay / k
@@ -568,7 +572,7 @@ func _score_jump(sim: BallSimulation, s_t: float, angle_t: float, lateral: float
 	var a := tuning.steering_acceleration * tuning.air_control
 	var reach := a / k * (steer_time - (1.0 - exp(-k * steer_time)) / k) * 0.8
 	if echo:
-		reach += tuning.echo_redirect_speed * decay / k
+		reach += tuning.smash_redirect_speed * decay / k
 	var centre := angle_t + drift / level.tunnel_radius
 	var reach_bins := int(floor(reach / level.tunnel_radius / (TAU / ANGLE_BINS)))
 	var landing := _landing_row(_cell(s_l))
@@ -630,7 +634,7 @@ func _along_room(s: float, bin: int, cap: float) -> float:
 
 
 ## Just before touchdown: if the floor after the landing runs out again
-## soon, echo (tap) when the repeated jump lands well, or swipe a better
+## soon, smash (swipe down) when the bounce lands well, or swipe a better
 ## size (which fires on landing and re-shapes the jump).
 func _decide_landing_action(sim: BallSimulation, speed: float, frame: InputFrame) -> void:
 	var landing_s := sim.s + speed * sim.time_to_land()
@@ -653,12 +657,12 @@ func _decide_landing_action(sim: BallSimulation, speed: float, frame: InputFrame
 	var chosen: Dictionary = echo if tap else best
 	_landing = Vector2(chosen["landing_s"], chosen["landing_angle"])
 	if _tap_offset < -0.05 and timing_jitter > 0.0:
-		# Late: after touchdown (the echo still counts up to its grace time).
+		# Late: after touchdown (the smash still counts up to its grace time).
 		_late_tap = -_tap_offset - 0.05
 		_late_tap_strength = -1.0 if tap else _swipe(best["strength"])
 		return
 	if tap:
-		frame.tap = true
+		frame.smash = true
 	else:
 		frame.jump_strength = _swipe(best["strength"])
 
@@ -735,3 +739,8 @@ func _centre_of_window(bin: int, s0: float, s1: float, side: int, current: float
 	# Already inside: stay put unless too close to an edge.
 	var here := a_low + TunnelMath.wrap_angle_positive(current - a_low)
 	return clampf(here, a_low + inset, a_high - inset)
+
+
+## Forward speed at s, smash speed-ups included.
+func _speed_at(s: float) -> float:
+	return level.speed_at(s) * _boost

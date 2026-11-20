@@ -40,7 +40,7 @@ func load_level(p_level: LevelData) -> void:
 	level = p_level
 	simulation = BallSimulation.new(level, tuning)
 	if autopilot:
-		autopilot = Autopilot.new(level, tuning)
+		autopilot = autopilot.get_script().new(level, tuning)
 	attempt = 0
 	reset_run()
 
@@ -52,7 +52,7 @@ func reset_run(start_s: float = 0.0, start_angle: float = 0.0) -> void:
 	if autopilot:
 		# A fresh bot per run (same reflexes), so no stale plan carries over.
 		var delay := autopilot.steering_delay
-		autopilot = Autopilot.new(level, tuning)
+		autopilot = autopilot.get_script().new(level, tuning)
 		autopilot.steering_delay = delay
 	_accumulator = 0.0
 	longest_chain = 0
@@ -119,7 +119,7 @@ func _sync_view(alpha: float) -> void:
 
 
 func _handle(event: BallSimulation.SimEvent) -> void:
-	longest_chain = maxi(longest_chain, simulation.echo_chain)
+	longest_chain = maxi(longest_chain, simulation.smash_chain)
 	sim_event.emit(event)
 	match event.type:
 		BallSimulation.EventType.FELL:
