@@ -479,7 +479,10 @@ func _collide_with_shell() -> Vector3:
 		velocity = tangent * 0.9 - normal * into * tuning.wall_restitution
 	forward_speed = velocity.x
 	lateral_speed = velocity.y
-	vertical_speed = velocity.z
+	# A pop off an edge turns forward speed into height: at the top speeds
+	# that would throw the ball through the ceiling, so it never rises
+	# faster than the biggest jump does.
+	vertical_speed = minf(velocity.z, sqrt(2.0 * tuning.gravity * tuning.max_jump_height))
 	return normal
 
 

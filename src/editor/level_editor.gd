@@ -556,6 +556,7 @@ func _insert_pattern(section: Dictionary) -> void:
 	twin.speed_ramp = level.speed_ramp
 	twin.tunnel_radius = level.tunnel_radius
 	twin.spin = level.spin
+	twin.speed_keys = level.speed_keys
 	var seed := int(Time.get_ticks_usec() % 100000)
 	var result := LevelGenerator.new().stamp(twin, TUNING, section, s, path_angle, seed)
 	var span: float = float(result["end"]) - s + level.speed_at(s) * 0.8
@@ -565,6 +566,12 @@ func _insert_pattern(section: Dictionary) -> void:
 	for key in level.spin:
 		if key.s >= s:
 			key.s += span
+	for key in level.speed_keys:
+		if key.s >= s:
+			key.s += span
+	for hint in level.hints:
+		if hint.s >= s:
+			hint.s += span
 	level.length += span
 	var added: Array[HoleData] = []
 	added.assign(result["holes"])

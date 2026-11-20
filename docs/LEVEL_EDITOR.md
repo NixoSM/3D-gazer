@@ -96,7 +96,7 @@ the level from the start, much faster than real time:
 |---|---|---|---|
 | cyan | Instant | 0 s | It is *possible*. If this one falls, nobody will finish. |
 | violet | Quick | 0.2 s | A good player can do it. Every shipped level must pass this one (it is a test). |
-| pink | Relaxed | 0.35 s | Most people can. Today Dawn passes it and Tide and Ember do not. |
+| pink | Relaxed | 0.35 s | Most people can. Of the bundled levels only Lemonade is meant to pass it. |
 
 Their paths are drawn on the strip: **solid** where they roll, **dotted**
 where they fly, a **triangle** where they jump, a **diamond** where they
@@ -139,9 +139,12 @@ line pushes the ball right, left pushes it left. You set the spin in the
 inspector's **Spin** section, like the speed: a direction (left, right or
 none), a speed in degrees per second at the start, and how much faster it
 gets by the finish. (It is saved as two spin keys, start and finish, so the
-level format is unchanged. The bundled levels were made by the generator,
-whose spin changes and switches direction section by section; changing the
-Spin fields replaces that with one steady spin.)
+level format is unchanged. The bundled levels have spin that steps up act
+by act; changing the Spin fields replaces that with one steady spin.)
+
+Speed surges and hints (see LEVEL_FORMAT.md) are kept when a level is
+saved, and the time ruler and the bots follow them, but they cannot be
+edited in the editor yet.
 
 **The minimap** (far left) is the whole level: problems in red, where the
 bots fall, and the yellow box is what the strip shows. Click or drag on it
@@ -171,8 +174,8 @@ ball sees from that spot.
 | Zoom | Ctrl/Cmd + scroll |
 | Turn the tunnel | Shift + scroll |
 
-**Insert a pattern** (inspector) drops in a stretch made by the same
-generator that wrote the bundled levels (gates, rings, echo runs, bridges,
+**Insert a pattern** (inspector) drops in a stretch made by the pattern
+generator that wrote the first bundled levels (gates, rings, echo runs, bridges,
 corkscrews, slaloms…), around the route the bots take at the mouse's
 position. It *inserts*: everything after that point moves further on and
 the level gets longer, so nothing overlaps. The new holes come in selected,
@@ -215,10 +218,10 @@ and listed in `levels/manifest.json` (the order there is the play order).
 Running the editor from the source, **File → Add to the game's level list**
 does the manifest part. Then commit, and the next iPhone build has it.
 
-Note that the three bundled levels are written by
-`tools/generate_levels.gd`: if someone re-runs that script, hand edits to
-`01_dawn`, `02_tide` and `03_ember` are overwritten. Save edited copies
-under a new id, or stop regenerating those levels.
+Note that the seven bundled levels are written by
+`tools/author_levels.gd` from their scripts in `tools/levels/`: if someone
+re-runs that script, hand edits to them are overwritten. Save edited
+copies under a new id, or change the level's script instead.
 
 ## For developers
 

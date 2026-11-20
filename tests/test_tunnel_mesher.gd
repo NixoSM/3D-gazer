@@ -8,8 +8,9 @@ extends TestCase
 ##     triangles except along the holes' edges and the ends of the stretch,
 ##     including where two chunks meet (no cracks, no T-junctions);
 ##   * every edge of every hole has a cut face welded to it;
-##   * the edge distance the floor shader draws the outline from is the
-##     true one wherever ink can reach (no stray black lines);
+##   * the edge distance the floor shader draws the outline from, and its
+##     gradient (how wide the outline is far away), are the true ones
+##     wherever ink can reach (no stray black lines);
 ##   * a chunk stays within its triangle and time budget.
 
 const ANGLE_BUCKETS := 64
@@ -226,21 +227,71 @@ func test_outline_comes_from_true_edge_distances() -> void:
 				return
 
 
+func test_outline_width_comes_from_true_gradients() -> void:
+	# Far away the outline is as wide as a pixel and a half of edge distance,
+	# so the shader needs how fast that distance changes per pixel. It takes
+	# the gradient each vertex carries (interpolated), not each triangle's
+	# own slope, which jumps between triangles where the field curves: with
+	# MSAA that drew faint dotted lines beside the outline. Wherever ink can
+	# reach, the interpolated gradient must be the field's.
+	var level := _level()
+	var step := 1.0 / 256.0
+	var checked := 0
+	for geometry: TunnelMesher.Geometry in _chunks(level):
+		var v := geometry.floor_vertices
+		var uv := geometry.floor_uvs
+		var slopes := geometry.floor_slopes
+		var idx := geometry.floor_indices
+		assert_eq(slopes.size(), v.size(), "a gradient for every floor vertex")
+		for i in range(0, idx.size(), 3):
+			var p := [v[idx[i]], v[idx[i + 1]], v[idx[i + 2]]]
+			var d := [uv[idx[i]].x, uv[idx[i + 1]].x, uv[idx[i + 2]].x]
+			var g := [slopes[idx[i]], slopes[idx[i + 1]], slopes[idx[i + 2]]]
+			for a in 5:
+				for b in 5 - a:
+					var c := 4 - a - b
+					var interpolated: float = (d[0] * a + d[1] * b + d[2] * c) / 4.0
+					if interpolated >= TunnelMesher.INK_REACH:
+						continue
+					var slope: Vector2 = (g[0] * a + g[1] * b + g[2] * c) / 4.0
+					var q := _surface((p[0] * a + p[1] * b + p[2] * c) / 4.0)
+					var turn := step / level.tunnel_radius
+					var truth := Vector2(
+						level.floor_distance(q.x + step, q.y) - level.floor_distance(q.x - step, q.y),
+						level.floor_distance(q.x, q.y + turn) - level.floor_distance(q.x, q.y - turn)) / (2.0 * step)
+					checked += 1
+					if slope.distance_to(truth) > 0.1:
+						assert_true(false, "gradient (%.2f, %.2f), truly (%.2f, %.2f) at s %.2f, angle %.1f°" % [slope.x, slope.y, truth.x, truth.y, q.x, rad_to_deg(q.y)])
+						return
+	assert_true(checked > 10000, "only %d samples near edges" % checked)
+
+
 func test_chunks_stay_within_budget() -> void:
-	var level := LevelSerializer.load_file("res://levels/03_ember.json").level
-	var worst_triangles := 0
-	var worst_ms := 0.0
-	var s := 0.0
-	while s < 360.0:
-		var start := Time.get_ticks_usec()
-		var geometry := TunnelMesher.build(level, s, s + TunnelView.CHUNK_LENGTH)
-		worst_ms = maxf(worst_ms, (Time.get_ticks_usec() - start) / 1000.0)
-		worst_triangles = maxi(worst_triangles, geometry.triangle_count())
-		s += TunnelView.CHUNK_LENGTH
-	# About nine chunks are on screen: keep the tunnel well under 100k triangles.
-	assert_true(worst_triangles < 11000, "worst chunk has %d triangles" % worst_triangles)
-	# Built on worker threads ahead of the camera; generous for slow CI machines.
-	assert_true(worst_ms < 1000.0, "worst chunk took %.0f ms" % worst_ms)
+	# Every bundled level, at its busiest: the chunks with the most holes.
+	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://levels/manifest.json"))
+	for id in manifest["levels"]:
+		var level := LevelSerializer.load_file("res://levels/%s.json" % id).level
+		var busiest := []
+		var s := 0.0
+		while s < level.length:
+			busiest.append([level.holes_between(s, s + TunnelView.CHUNK_LENGTH).size(), s])
+			s += TunnelView.CHUNK_LENGTH
+		busiest.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+		var worst_triangles := 0
+		var worst_ms := 0.0
+		for entry in busiest.slice(0, 6):
+			var start := Time.get_ticks_usec()
+			var geometry := TunnelMesher.build(level, entry[1], entry[1] + TunnelView.CHUNK_LENGTH)
+			worst_ms = maxf(worst_ms, (Time.get_ticks_usec() - start) / 1000.0)
+			worst_triangles = maxi(worst_triangles, geometry.triangle_count())
+		# About nine chunks are on screen. Ember, the busiest old level, peaked
+		# at 10k a chunk; the new levels pack in far more edges (Screwball's
+		# threads run the whole level) and peak near 22k, about 190k on
+		# screen at the very busiest: still small for a phone GPU, but
+		# keep it from growing further.
+		assert_true(worst_triangles < 24000, "%s: worst chunk has %d triangles" % [id, worst_triangles])
+		# Built on worker threads ahead of the camera; generous for slow CI machines.
+		assert_true(worst_ms < 1000.0, "%s: worst chunk took %.0f ms" % [id, worst_ms])
 
 
 func test_mesh_matches_physics_where_the_ball_falls() -> void:

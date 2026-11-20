@@ -9,7 +9,7 @@ extends Node
 ## hole selected, and during a playtest.
 
 var _out := "user://editor_shots"
-var _level_id := "02_tide"
+var _level_id := "02_bubblegum"
 var _editor: LevelEditor
 
 

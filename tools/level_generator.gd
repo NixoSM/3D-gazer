@@ -2,10 +2,11 @@ class_name LevelGenerator
 extends RefCounted
 ## Builds deterministic levels from an authored *script* of sections.
 ##
-## This is an authoring tool, not part of the runtime: tools/generate_levels.gd
-## runs it once and writes JSON into res://levels/. The game then loads those
-## files like any other level, so generated and hand-made (or future
-## editor-made) levels are indistinguishable.
+## This is an authoring tool, not part of the runtime. It made the first
+## bundled levels (Dawn, Tide, Ember, since replaced by hand-made ones, see
+## tools/author_levels.gd); today the level editor's "Insert a pattern" uses
+## it (stamp()). What it writes is plain level data, indistinguishable from
+## a hand-made level.
 ##
 ## A level is a list of sections played in order, each naming a pattern, how
 ## many of it, how intense it is and (optionally) what the ground spin does

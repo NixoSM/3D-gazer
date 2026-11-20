@@ -20,8 +20,9 @@ extends RefCounted
 ## is computed once per grid edge from the same two values, so neighbouring
 ## cells and neighbouring chunks meet exactly, without cracks or overlaps.
 ## Each contour segment is extruded outwards through the shell into a cut
-## face. The floor's vertices carry the distance to the edge (UV.x), from
-## which tunnel_floor.gdshader draws the black outline.
+## face. The floor's vertices carry the distance to the edge (UV.x) and how
+## fast it changes (UV2, see _node_slope), from which tunnel_floor.gdshader
+## draws the black outline.
 ##
 ## No T-junctions: a long plain quad's sides pick up every vertex that a
 ## neighbouring cell put on the same grid line, so no vertex ever sits in
@@ -75,6 +76,9 @@ const PLAIN_DISTANCE := INK_REACH + 0.05
 class Geometry:
 	var floor_vertices := PackedVector3Array()
 	var floor_uvs := PackedVector2Array()
+	## Gradient of the edge distance at each floor vertex (see _node_slope);
+	## zero on plain strips, which carry no outline.
+	var floor_slopes := PackedVector2Array()
 	var floor_indices := PackedInt32Array()
 	var wall_vertices := PackedVector3Array()
 	var wall_uvs := PackedVector2Array()
@@ -96,6 +100,8 @@ var _sin := PackedFloat64Array()
 var _cos := PackedFloat64Array()
 ## Distance at every grid node (row-major: row * COLUMNS + column), NAN until evaluated.
 var _d := PackedFloat64Array()
+## Gradient at every grid node, same layout, x NAN until evaluated (see _node_slope).
+var _slopes := PackedVector2Array()
 ## 1 where a floor vertex sits on grid node (row, column), same layout as _d.
 var _marks := PackedByteArray()
 ## Plain floor runs, three ints each: column, first row, end row.
@@ -116,6 +122,7 @@ static func to_mesh(geometry: Geometry, floor_material: Material, wall_material:
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = geometry.floor_vertices
 		arrays[Mesh.ARRAY_TEX_UV] = geometry.floor_uvs
+		arrays[Mesh.ARRAY_TEX_UV2] = geometry.floor_slopes
 		arrays[Mesh.ARRAY_INDEX] = geometry.floor_indices
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, floor_material)
@@ -152,6 +159,8 @@ func _build(level: LevelData, s0: float, s1: float, shell_thickness: float) -> G
 		_cos[k] = cos(a)
 	_d.resize((_rows + 1) * COLUMNS)
 	_d.fill(NAN)
+	_slopes.resize((_rows + 1) * COLUMNS)
+	_slopes.fill(Vector2(NAN, NAN))
 	_marks.resize((_rows + 1) * COLUMNS)
 	_marks.fill(0)
 	_runs.clear()
@@ -217,6 +226,39 @@ func _node(row: int, column: int) -> float:
 	return d
 
 
+## Gradient of the edge distance at grid node (row, column), in metres per
+## metre along s and around the arc: central differences between its four
+## neighbours, worked out once. A chunk's first and last rows reach one row
+## into the next chunk, which works out the same numbers, bit for bit.
+## Every floor vertex of a cut cell carries one (a crossing interpolates
+## its grid edge's two). Far away the outline's width follows how fast the
+## edge distance changes from one pixel to the next. Measured on each
+## triangle (fwidth), that rate jumps from one triangle to the next wherever
+## the field curves (between two holes' corners it bends a lot), and with
+## MSAA it is read off whichever triangle covers a sample, at the pixel's
+## centre: the outline's soft inner side broke up into faint dotted grey
+## lines. The gradient, interpolated, changes smoothly instead. (Within ink
+## reach of an edge the field is smooth, the holes' corners rounded and
+## their union blended, so central differences are close to the truth.)
+func _node_slope(row: int, column: int) -> Vector2:
+	var i := row * COLUMNS + column
+	var g := _slopes[i]
+	if is_nan(g.x):
+		var along := _any_node(row + 1, column) - _any_node(row - 1, column)
+		var around := _node(row, (column + 1) % COLUMNS) - _node(row, (column + COLUMNS - 1) % COLUMNS)
+		g = Vector2(along / (2.0 * FINE), around / (2.0 * TAU * _radius / COLUMNS))
+		_slopes[i] = g
+	return g
+
+
+## Like _node(), also for a row just outside the chunk (not kept).
+func _any_node(row: int, column: int) -> float:
+	if row >= 0 and row <= _rows:
+		return _node(row, column)
+	_geometry.evaluations += 1
+	return _level.floor_distance_in(_window, 0, _row_s(row), column_angle(column))
+
+
 func _row_s(row: int) -> float:
 	return _s0 + row * FINE
 
@@ -276,6 +318,7 @@ func _line_rows(column: int, from: int, to: int) -> PackedInt32Array:
 func _floor_vertex_node(row: int, column: int) -> void:
 	_geometry.floor_vertices.append(_point_on_column(_row_s(row), column, _radius))
 	_geometry.floor_uvs.append(Vector2(PLAIN_DISTANCE, 0.0))
+	_geometry.floor_slopes.append(Vector2.ZERO)
 
 
 func _point_on_column(s: float, column: int, r: float) -> Vector3:
@@ -296,6 +339,7 @@ class Point:
 	var angle: float   # used when column < 0
 	var d: float
 	var crossing: bool
+	var slope := Vector2.ZERO  # gradient of the field (see _node_slope)
 
 	func _init(p_s: float, p_column: int, p_angle: float, p_d: float, p_crossing: bool) -> void:
 		s = p_s
@@ -321,12 +365,16 @@ func _march(row: int, k: int, k2: int, d0: float, d1: float, d2: float, d3: floa
 	var solid := [d0 >= 0.0, d1 >= 0.0, d2 >= 0.0, d3 >= 0.0]
 	if solid[0]:
 		_mark(row, k)
+		corners[0].slope = _node_slope(row, k)
 	if solid[1]:
 		_mark(row, k2)
+		corners[1].slope = _node_slope(row, k2)
 	if solid[2]:
 		_mark(row + 1, k2)
+		corners[2].slope = _node_slope(row + 1, k2)
 	if solid[3]:
 		_mark(row + 1, k)
+		corners[3].slope = _node_slope(row + 1, k)
 
 	# Walk the edge of the cell: floor corners, and a crossing wherever the
 	# sign changes.
@@ -364,12 +412,15 @@ func _crossing_on_row(row: int, k: int, k2: int, dk: float, dk2: float) -> Point
 	if (dk >= 0.0) == (dk2 >= 0.0):
 		return null
 	var t := _snap(dk / (dk - dk2))
+	var p: Point
 	if t == 0.0:
-		return Point.new(_row_s(row), k, 0.0, 0.0, true)
-	if t == 1.0:
-		return Point.new(_row_s(row), k2, 0.0, 0.0, true)
-	var angle := (float(k) + t) * TAU / COLUMNS
-	return Point.new(_row_s(row), -1, angle, 0.0, true)
+		p = Point.new(_row_s(row), k, 0.0, 0.0, true)
+	elif t == 1.0:
+		p = Point.new(_row_s(row), k2, 0.0, 0.0, true)
+	else:
+		p = Point.new(_row_s(row), -1, (float(k) + t) * TAU / COLUMNS, 0.0, true)
+	p.slope = _node_slope(row, k).lerp(_node_slope(row, k2), t)
+	return p
 
 
 ## Crossing on column `column` between `row` and `row + 1` (always in that order).
@@ -377,9 +428,13 @@ func _crossing_on_column(row: int, column: int, d_low: float, d_high: float) -> 
 	if (d_low >= 0.0) == (d_high >= 0.0):
 		return null
 	var t := _snap(d_low / (d_low - d_high))
+	var p: Point
 	if t == 1.0:
-		return Point.new(_row_s(row + 1), column, 0.0, 0.0, true)
-	return Point.new(_row_s(row) + t * FINE, column, 0.0, 0.0, true)
+		p = Point.new(_row_s(row + 1), column, 0.0, 0.0, true)
+	else:
+		p = Point.new(_row_s(row) + t * FINE, column, 0.0, 0.0, true)
+	p.slope = _node_slope(row, column).lerp(_node_slope(row + 1, column), t)
+	return p
 
 
 ## An edge that passes within a hair of a grid node crosses exactly at the
@@ -403,6 +458,7 @@ func _emit_piece(piece: Array) -> void:
 	for p: Point in piece:
 		_geometry.floor_vertices.append(_position(p, _radius))
 		_geometry.floor_uvs.append(Vector2(p.d, 0.0))
+		_geometry.floor_slopes.append(p.slope)
 	# Where an edge runs exactly through a grid node, a crossing lands on a
 	# corner: skip the triangles that collapse to a line or a point.
 	var v := _geometry.floor_vertices

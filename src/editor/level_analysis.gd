@@ -185,7 +185,7 @@ func _run_bot(data: Dictionary, index: int, trace: BotTrace, snapshot: Dictionar
 				"points": trace.points.size(),
 				"marks": trace.marks.size(),
 				"sim": _save_state(sim, ["level", "tuning"]),
-				"bot": _save_state(bot, ["level", "tuning", "_ring_cache", "_cell_cache"]),
+				"bot": _save_state(bot, ["level", "tuning", "_rows", "_landing_rows", "_rng"]),
 			})
 			next_snapshot += SNAPSHOT_EVERY
 		for event in sim.step(STEP, bot.decide(sim)):

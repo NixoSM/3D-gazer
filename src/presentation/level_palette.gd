@@ -3,6 +3,8 @@ extends RefCounted
 ## Turns a level's PaletteStops into gradients for shaders and colour lookups
 ## for scripts, so GPU and CPU always agree on "the colour at progress p".
 
+const TEXTURE_WIDTH := 2048
+
 var wall := Gradient.new()
 var void_color := Gradient.new()
 var accent := Gradient.new()
@@ -31,10 +33,11 @@ func _init(stops: Array[PaletteStop]) -> void:
 	for gradient in [wall, void_color, accent]:
 		gradient.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CUBIC
 		gradient.interpolation_color_space = Gradient.GRADIENT_COLOR_SPACE_OKLAB
+	# Fine enough for colour bands a few metres long on a 2 km level.
 	wall_texture.gradient = wall
-	wall_texture.width = 256
+	wall_texture.width = TEXTURE_WIDTH
 	accent_texture.gradient = accent
-	accent_texture.width = 256
+	accent_texture.width = TEXTURE_WIDTH
 
 
 func wall_at(progress: float) -> Color:

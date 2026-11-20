@@ -1,0 +1,373 @@
+{
+  "format_version": 4,
+  "id": "01_lemonade",
+  "name": "Lemonade",
+  "length": 1272.0,
+  "tunnel_radius": 4.0,
+  "base_speed": 20.0,
+  "speed_ramp": 0.2,
+  "palette": [
+    {
+      "at": 0.0,
+      "wall": "#ffe066",
+      "void": "#2b2d8f",
+      "accent": "#ffffff"
+    },
+    {
+      "at": 0.3,
+      "wall": "#d4f26a",
+      "void": "#1f3590",
+      "accent": "#fff6a8"
+    },
+    {
+      "at": 0.58,
+      "wall": "#7cebc0",
+      "void": "#262070",
+      "accent": "#ffffff"
+    },
+    {
+      "at": 0.82,
+      "wall": "#ffa3c8",
+      "void": "#3a1670",
+      "accent": "#fff36b"
+    },
+    {
+      "at": 1.0,
+      "wall": "#ff7aa8",
+      "void": "#2a0f5c",
+      "accent": "#ffffff"
+    }
+  ],
+  "spin": [
+    {
+      "s": 882.79,
+      "rate": 0.0
+    },
+    {
+      "s": 917.04,
+      "rate": 12.0
+    },
+    {
+      "s": 1093.05,
+      "rate": 12.0
+    },
+    {
+      "s": 1116.52,
+      "rate": 16.0
+    }
+  ],
+  "hints": [
+    {
+      "s": 18.03,
+      "text": "tilt to roll"
+    },
+    {
+      "s": 207.31,
+      "text": "swipe up to jump"
+    },
+    {
+      "s": 279.99,
+      "text": "longer swipe, longer jump"
+    },
+    {
+      "s": 361.92,
+      "text": "short swipe for a hop"
+    },
+    {
+      "s": 434.18,
+      "text": "steer in the air"
+    },
+    {
+      "s": 559.23,
+      "text": "tap as you land to echo"
+    },
+    {
+      "s": 768.06,
+      "text": "tilt as you echo to aim"
+    },
+    {
+      "s": 875.96,
+      "text": "the tunnel turns: lean"
+    }
+  ],
+  "holes": [
+    {
+      "s": 60.28,
+      "length": 7.07,
+      "angle": 275.0,
+      "width": 210.0
+    },
+    {
+      "s": 90.64,
+      "length": 7.1,
+      "angle": 165.0,
+      "width": 210.0
+    },
+    {
+      "s": 121.14,
+      "length": 7.14,
+      "angle": 260.0,
+      "width": 220.0
+    },
+    {
+      "s": 147.69,
+      "length": 6.14,
+      "angle": 150.0,
+      "width": 240.0
+    },
+    {
+      "s": 165.11,
+      "length": 6.16,
+      "angle": 230.0,
+      "width": 240.0
+    },
+    {
+      "s": 182.57,
+      "length": 6.18,
+      "angle": 150.0,
+      "width": 240.0
+    },
+    {
+      "s": 200.08,
+      "length": 6.19,
+      "angle": 230.0,
+      "width": 240.0
+    },
+    {
+      "s": 232.14,
+      "length": 3.11,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 261.22,
+      "length": 5.21,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 298.81,
+      "length": 10.48,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 332.39,
+      "length": 13.06,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 383.09,
+      "length": 2.55,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 397.32,
+      "length": 12.76,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 453.43,
+      "length": 6.86,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 475.97,
+      "length": 8.6,
+      "angle": 250.0,
+      "width": 245.0
+    },
+    {
+      "s": 509.37,
+      "length": 6.92,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 532.09,
+      "length": 8.67,
+      "angle": 140.0,
+      "width": 245.0
+    },
+    {
+      "s": 584.96,
+      "length": 11.68,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 604.52,
+      "length": 11.71,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 624.13,
+      "length": 11.75,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 665.64,
+      "length": 12.26,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 685.43,
+      "length": 12.29,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 705.28,
+      "length": 12.33,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 725.18,
+      "length": 12.36,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 745.13,
+      "length": 12.4,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 792.08,
+      "length": 12.48,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 804.57,
+      "length": 7.66,
+      "angle": 165.0,
+      "width": 240.0
+    },
+    {
+      "s": 812.23,
+      "length": 12.52,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 824.75,
+      "length": 7.69,
+      "angle": 195.0,
+      "width": 240.0
+    },
+    {
+      "s": 832.43,
+      "length": 12.55,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 844.98,
+      "length": 7.71,
+      "angle": 220.0,
+      "width": 240.0
+    },
+    {
+      "s": 852.69,
+      "length": 12.59,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 910.17,
+      "length": 50.47,
+      "angle": 220.0,
+      "width": 230.0,
+      "twist": 0.61
+    },
+    {
+      "s": 960.65,
+      "length": 50.82,
+      "angle": 250.8,
+      "width": 230.0,
+      "twist": -0.61
+    },
+    {
+      "s": 1025.39,
+      "length": 7.44,
+      "angle": 170.0,
+      "width": 235.0
+    },
+    {
+      "s": 1046.32,
+      "length": 7.46,
+      "angle": 255.0,
+      "width": 235.0
+    },
+    {
+      "s": 1067.31,
+      "length": 7.48,
+      "angle": 175.0,
+      "width": 235.0
+    },
+    {
+      "s": 1102.43,
+      "length": 7.04,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 1125.93,
+      "length": 9.42,
+      "angle": 250.0,
+      "width": 245.0
+    },
+    {
+      "s": 1153.53,
+      "length": 13.11,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 1166.64,
+      "length": 8.05,
+      "angle": 225.0,
+      "width": 240.0
+    },
+    {
+      "s": 1174.69,
+      "length": 13.15,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 1187.84,
+      "length": 8.07,
+      "angle": 200.0,
+      "width": 240.0
+    },
+    {
+      "s": 1195.91,
+      "length": 13.19,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 1225.06,
+      "length": 2.86,
+      "angle": 0.0,
+      "width": 360.0
+    },
+    {
+      "s": 1241.06,
+      "length": 14.36,
+      "angle": 0.0,
+      "width": 360.0
+    }
+  ]
+}

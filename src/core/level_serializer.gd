@@ -8,10 +8,11 @@ extends RefCounted
 ## in radians in memory.
 ##
 ## Version history: 1 = holes and palette; 2 adds the optional `spin` keys;
-## 3 adds the optional hole `twist` (and holes get rounded, blended edges).
+## 3 adds the optional hole `twist` (and holes get rounded, blended edges);
+## 4 adds the optional `speed` surge keys and on-screen `hints`.
 ## Older versions are read as if every new field had its default.
 
-const FORMAT_VERSION := 3
+const FORMAT_VERSION := 4
 const OLDEST_SUPPORTED_VERSION := 1
 
 
@@ -77,6 +78,12 @@ static func from_dict(data: Dictionary, source_name: String = "<dict>") -> Resul
 	for entry in data.get("spin", []):
 		level.spin.append(SpinKey.new(float(entry.get("s", 0.0)), float(entry.get("rate", 0.0))))
 
+	for entry in data.get("speed", []):
+		level.speed_keys.append(SpeedKey.new(float(entry.get("s", 0.0)), float(entry.get("factor", 1.0))))
+
+	for entry in data.get("hints", []):
+		level.hints.append(LevelHint.new(float(entry.get("s", 0.0)), str(entry.get("text", ""))))
+
 	level.sort()
 	result.errors.append_array(validate(level, source_name))
 	result.level = level
@@ -106,7 +113,7 @@ static func to_dict(level: LevelData) -> Dictionary:
 	var spin := []
 	for key in level.spin:
 		spin.append({"s": snappedf(key.s, 0.01), "rate": snappedf(key.rate, 0.1)})
-	return {
+	var result := {
 		"format_version": FORMAT_VERSION,
 		"id": level.id,
 		"name": level.display_name,
@@ -116,8 +123,20 @@ static func to_dict(level: LevelData) -> Dictionary:
 		"speed_ramp": level.speed_ramp,
 		"palette": palette,
 		"spin": spin,
-		"holes": holes,
 	}
+	# Optional sections are only written when used, so plain levels stay plain.
+	if not level.speed_keys.is_empty():
+		var speed := []
+		for key in level.speed_keys:
+			speed.append({"s": snappedf(key.s, 0.01), "factor": snappedf(key.factor, 0.001)})
+		result["speed"] = speed
+	if not level.hints.is_empty():
+		var hints := []
+		for hint in level.hints:
+			hints.append({"s": snappedf(hint.s, 0.01), "text": hint.text})
+		result["hints"] = hints
+	result["holes"] = holes
+	return result
 
 
 static func to_json(level: LevelData) -> String:
@@ -163,4 +182,13 @@ static func validate(level: LevelData, source_name: String = "<level>") -> Packe
 			errors.append("%s: spin key %d lies outside the tunnel" % [source_name, i])
 		if absf(key.rate) > 180.0:
 			errors.append("%s: spin key %d rate must be within ±180 °/s" % [source_name, i])
+	for i in level.speed_keys.size():
+		var key := level.speed_keys[i]
+		if key.s < 0.0 or key.s > level.length:
+			errors.append("%s: speed key %d lies outside the tunnel" % [source_name, i])
+		if key.factor < 0.25 or key.factor > 4.0:
+			errors.append("%s: speed key %d factor must be within 0.25..4" % [source_name, i])
+	for i in level.hints.size():
+		if level.hints[i].text.strip_edges().is_empty():
+			errors.append("%s: hint %d has no text" % [source_name, i])
 	return errors

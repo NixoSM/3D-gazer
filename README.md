@@ -14,14 +14,16 @@ notes climb a scale. The echo lands with a short hit-stop (swipe during it
 to change the height), and it wipes the ball's sideways momentum, so
 whatever you tilt during the freeze is where it goes.
 
-The tunnel also **spins**, gently late in the first level and hard on the
-others, carrying the ball sideways: lean against it. Within a level it
-always turns the same way and only ever speeds up. Spin is set per level,
-like speed, and is the main difficulty dial. Each level is about a
-minute long and faster than the last (20, 23.2 and 27 m/s at the
-start). The ball speeds up by 20% from start to finish, and the tunnel's colour moves through a palette (sunrise yellows to
-violet, sea greens to deep blue, lava yellow to red), so the colour around
-you tells you how far you are and the colour ahead shows what is coming.
+The tunnel also **spins**, gently late in the first level and harder on
+each one after, carrying the ball sideways: lean against it, or ride it.
+Within a level it always turns the same way and only ever speeds up. There
+are seven levels of about a minute each, designed by hand: from
+**Lemonade**, which introduces every mechanic once (20 m/s, a little spin
+at the end), to **Supernova**, six titled acts at 34 to 51 m/s with the
+tunnel turning at up to 160 °/s, designed so that nobody finishes it on the first try.
+The tunnel's colour moves through each level's palette, so the colour
+around you tells you how far you are and the colour ahead shows what is
+coming.
 The look is a deliberate throwback to Flash games: flat colours, hard
 shading, thick black outlines. The holes are cut into real geometry from
 the same shape the ball falls by, and every picture is checked pixel by
@@ -35,7 +37,7 @@ pixel against a ray-cast of the level (see [Checking the picture](#checking-the-
 |---|---|
 | Engine | Godot 4.5.1 (GDScript), Mobile renderer |
 | Platforms | iOS first. Android is an export preset away (see [docs/ANDROID.md](docs/ANDROID.md)) |
-| Levels in the game | Dawn, Tide, Ember (`levels/manifest.json`) |
+| Levels in the game | Lemonade, Bubblegum, Hot Sauce, Moon Bounce, Mixtape, Screwball, Supernova (`levels/manifest.json`; see [the seven levels](docs/GAME_DESIGN.md#the-seven-levels)) |
 | Levels in the folder only | `custom_level_test` (30 m/s, about 42 s): not in the manifest yet, the bots cannot finish it, see [Adding a level](#adding-a-level) |
 | Level editor | Desktop app for Windows and macOS, built from this same project |
 | Tests | Headless suite, including a bot that finishes every level with a human reaction delay, and a pixel oracle for the renderer |
@@ -107,14 +109,16 @@ there you save the file and commit it (or upload it on GitHub) and add the
 id to the manifest by hand.
 
 Then run the tests: every level in the manifest must be finished by the
-quick bot (0.2 s reaction), so a level the bots cannot beat fails CI.
+bot with perfect reactions and with a reaction delay (0.2 s for a level
+not in the test's table), so a level the bots cannot beat fails CI.
 Once the tests pass and it is merged, the next iOS build has it.
 
 Two traps:
 
-- `tools/generate_levels.gd` rewrites `01_dawn`, `02_tide` and `03_ember`
-  (it keeps every other level in the manifest). Save hand edits to the
-  bundled three under a new id, or they are lost the next time it runs.
+- `tools/author_levels.gd` rewrites the seven bundled levels and the
+  manifest from their scripts in `tools/levels/`. Save hand edits to a
+  bundled level under a new id (and add it to the manifest again after
+  re-running), or they are lost the next time it runs.
 - Do not rename a shipped level's id: progress is saved by id.
 
 ## Developing
@@ -142,8 +146,10 @@ Useful tools, all run from the repository root:
 
 | Command | What it does |
 |---|---|
-| `godot --headless --script res://tools/trace_autopilot.gd -- 02_tide 0.2` | Bot plays a level with a reaction delay and prints where and why it struggles |
-| `godot --headless --script res://tools/generate_levels.gd [--verbose]` | Regenerates the three bundled levels (see the trap above) |
+| `godot --headless --script res://tools/trace_autopilot.gd -- 02_bubblegum 0.2` | Bot plays a level with a reaction delay and prints where and why it struggles |
+| `godot --headless --script res://tools/author_levels.gd` | Writes the seven bundled levels from their scripts in `tools/levels/` (see the trap above) |
+| `godot --headless --script res://tools/rate_levels.gd -- all [--players 24]` | How hard each level is: the longest reaction delay the bot survives, or how often human-like bots finish |
+| `godot --headless --script res://tools/trace_path.gd -- <level.json> <out.csv> [delay]` then `python3 tools/level_map.py <level.json> <out.png> <out.csv>` | A level unrolled flat as a picture, with the bot's path drawn on it |
 | `godot --headless --script res://tools/idle_report.gd` | How much of each level is plain scrolling |
 | `xvfb-run -a godot $MOBILE --resolution 1170x2532 res://tools/capture_screens.tscn -- <dir>` | Reference screenshots (`render_audit.tscn` for close-ups) |
 | `xvfb-run -a godot $MOBILE --resolution 585x1266 res://tools/visual_audit.tscn -- <dir>` then `python3 tools/visual_oracle.py <dir>` | The pixel oracle (below) |
@@ -161,9 +167,9 @@ was looking at screenshots. Now there are two automated ones:
 - `tests/test_tunnel_mesher.gd` (part of the test suite) checks the
   tunnel's geometry against the level definition: the floor covers exactly
   the solid wall, it is watertight across cells and chunks, every hole edge
-  has a cut face, the outline is drawn from true edge distances, a chunk
-  stays within its triangle budget.
-- The **pixel oracle** renders about 200 views of the three levels (around
+  has a cut face, the outline is drawn from true edge distances and
+  gradients, a chunk stays within its triangle budget.
+- The **pixel oracle** renders several hundred views of the seven levels (around
   every kind of hole, and along a bot's run) with each material drawn as a
   flat ID colour, then ray-casts the same views from the level file alone
   and compares every pixel. It shares no code with the renderer. It fails
@@ -172,7 +178,8 @@ was looking at screenshots. Now there are two automated ones:
   and writes side-by-side images of what was drawn and what should have
   been. The first version of the new tunnel had 140 one-pixel pinholes
   that no screenshot showed, then thin black lines between hole corners
-  that the first oracle missed; it finds both now, and both fixes are in.
+  that the first oracle missed, then (on the seven levels) faint dotted
+  lines beside far outlines; it finds all three now, and the fixes are in.
 
 ### Repository layout
 
@@ -182,7 +189,8 @@ export_presets.cfg   iOS, Android, Level editor (Windows), Level editor (macOS)
 scenes/main.tscn     The game's entry scene
 src/
   core/          Pure game rules: no nodes, no rendering, fully unit-tested
-    level_data.gd, hole_data.gd, palette_stop.gd, spin_key.gd   what a level *is*
+    level_data.gd, hole_data.gd, palette_stop.gd, spin_key.gd,
+    speed_key.gd, level_hint.gd                     what a level *is*
     level_serializer.gd                            JSON <-> LevelData (read and write)
     level_validator.gd                             "is this level beatable?"
     ball_simulation.gd                             the rules, stepped at 120 Hz, deterministic
@@ -200,7 +208,7 @@ shaders/         Tunnel floor, cut faces, void backdrop, ball, editor strip (hol
 levels/          Level JSON files + manifest.json (play order)
 resources/       ball_tuning.tres (feel), balls/*.tres (ball looks)
 assets/          Font (Lilita One), app icon PNGs (drawn by tools/make_icon.py)
-tools/           Level generator, bot trace, screenshot, pixel oracle, perf and icon tools
+tools/           Level scripts (levels/) and builder, bot trace and rating, screenshot, pixel oracle, perf and icon tools
 tests/           Headless test runner and tests (tests/test_*.gd are found automatically)
 docs/            Design, architecture, level format, editor and build guides
 .github/workflows/

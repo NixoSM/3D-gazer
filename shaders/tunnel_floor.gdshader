@@ -3,8 +3,9 @@
 //
 // The holes are already cut out of the geometry (TunnelMesher), so this
 // shader never discards anything. Each vertex carries its distance to the
-// nearest edge (UV.x); the black outline is the floor within
-// `outline_width` of an edge, so it only exists where there is floor.
+// nearest edge (UV.x) and that distance's gradient (UV2); the black outline
+// is the floor within `outline_width` of an edge, so it only exists where
+// there is floor.
 //
 // Everything else comes from the fragment's tunnel coordinates (s along the
 // axis, angle around it):
@@ -66,6 +67,8 @@ uniform vec3 fade_color : source_color = vec3(0.0);
 
 varying vec3 world_pos;
 varying float edge_distance;
+// Gradient of edge_distance, per metre along the tunnel (x) and around it (y).
+varying vec2 edge_slope;
 
 float wrap_angle(float a) {
 	return mod(a + PI, TAU) - PI;
@@ -99,12 +102,31 @@ float ink(float d, float per_pixel, float screen_height) {
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	edge_distance = UV.x;
+	edge_slope = UV2;
+}
+
+// How much the edge distance changes from this pixel to the next, from its
+// true gradient (interpolated, so it changes smoothly) and the pixel's step
+// across the floor. Not fwidth(edge_distance): that is each triangle's own
+// slope, which jumps from one triangle to the next where the field curves,
+// and with MSAA it is read off whichever triangle covers a sample, at the
+// pixel's centre. Far away, where the outline's width follows this rate,
+// those jumps broke its soft inner side into faint dotted grey lines.
+// The step comes from VERTEX (view space): world positions 2 km down the
+// tunnel are too coarse in 32-bit floats to difference between pixels.
+// step_x, step_y: the pixel's step across the floor in view space.
+float edge_per_pixel(vec2 slope, vec3 position, vec3 step_x, vec3 step_y, mat4 view_matrix) {
+	vec3 along = (view_matrix * vec4(0.0, 0.0, -1.0, 0.0)).xyz;
+	vec3 around = (view_matrix * vec4(-position.y, position.x, 0.0, 0.0)).xyz / max(length(position.xy), 0.001);
+	float across_x = dot(slope, vec2(dot(step_x, along), dot(step_x, around)));
+	float across_y = dot(slope, vec2(dot(step_y, along), dot(step_y, around)));
+	return max(abs(across_x) + abs(across_y), 0.00001);
 }
 
 void fragment() {
 	// The black outline. The ID view uses exactly the same ink, so the
 	// pixel oracle checks the outline the player sees, faint parts included.
-	float per_pixel = max(fwidth(edge_distance), 0.00001);
+	float per_pixel = edge_per_pixel(edge_slope, world_pos, dFdx(VERTEX), dFdy(VERTEX), VIEW_MATRIX);
 	float outline = ink(edge_distance, per_pixel, VIEWPORT_SIZE.y);
 	if (gazer_debug_ids == 1) {
 		ALBEDO = outline > INK_VISIBLE ? ID_OUTLINE : ID_FLOOR;

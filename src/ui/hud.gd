@@ -10,6 +10,8 @@ var _spin_tween: Tween
 var _spin_shown := ""
 var _toast: Label
 var _toast_tween: Tween
+var _hint: Label
+var _hint_tween: Tween
 
 
 func _ready() -> void:
@@ -43,6 +45,21 @@ func _ready() -> void:
 	_toast.modulate.a = 0.0
 	layout.add_child(_toast)
 
+	# Level hints sit low, under the ball, away from the tunnel ahead.
+	var push := Control.new()
+	push.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	push.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layout.add_child(push)
+	_hint = UiStyle.display("", 46)
+	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint.modulate.a = 0.0
+	layout.add_child(_hint)
+	var floor_gap := Control.new()
+	floor_gap.custom_minimum_size = Vector2(0, 150)
+	floor_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layout.add_child(floor_gap)
+
 
 ## Shows the spin as chevrons pointing the way the ball is being pushed:
 ## one to three of them by strength.
@@ -75,6 +92,27 @@ func clear_spin() -> void:
 	if _spin_tween:
 		_spin_tween.kill()
 	_spin.modulate.a = 0.0
+
+
+## A level hint ("swipe up to jump"): pops in, holds, fades.
+func hint(text: String, seconds: float = 2.2) -> void:
+	_hint.text = text.to_upper()
+	if _hint_tween:
+		_hint_tween.kill()
+	_hint.pivot_offset = _hint.size * 0.5
+	_hint.scale = Vector2.ONE * 0.8
+	_hint.modulate.a = 1.0
+	_hint_tween = create_tween()
+	_hint_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_hint_tween.tween_property(_hint, "scale", Vector2.ONE, 0.22)
+	_hint_tween.tween_interval(seconds)
+	_hint_tween.tween_property(_hint, "modulate:a", 0.0, 0.35)
+
+
+func clear_hint() -> void:
+	if _hint_tween:
+		_hint_tween.kill()
+	_hint.modulate.a = 0.0
 
 
 func toast(text: String, seconds: float = 1.6) -> void:

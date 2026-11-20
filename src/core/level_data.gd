@@ -22,12 +22,40 @@ var palette: Array[PaletteStop] = []
 var holes: Array[HoleData] = []
 ## Ground spin keys, sorted by `s`. Empty means no spin.
 var spin: Array[SpinKey] = []
+## Speed surge keys, sorted by `s`: a factor on the base speed profile.
+## Empty means factor 1 everywhere (the plain profile).
+var speed_keys: Array[SpeedKey] = []
+## On-screen prompts, sorted by `s` (see LevelHint).
+var hints: Array[LevelHint] = []
 
 var _cached_max_hole_length: float = -1.0
+## Seconds to reach every TIME_STEP metres, when speed keys make the
+## closed form of SpeedProfile inapplicable. Rebuilt when the speeds change.
+var _time_table := PackedFloat64Array()
+var _time_table_signature := ""
+
+## Resolution (m) of the time table used with speed keys.
+const TIME_STEP := 0.5
 
 
+## Forward speed (m/s) at distance s: the base profile times the surge factor.
 func speed_at(s: float) -> float:
-	return SpeedProfile.speed_at(s, length, base_speed, speed_ramp)
+	return SpeedProfile.speed_at(s, length, base_speed, speed_ramp) * speed_factor_at(s)
+
+
+## Surge factor at distance s (1 without speed keys).
+func speed_factor_at(s: float) -> float:
+	if speed_keys.is_empty():
+		return 1.0
+	if s <= speed_keys[0].s:
+		return speed_keys[0].factor
+	for i in range(1, speed_keys.size()):
+		var b := speed_keys[i]
+		if s < b.s:
+			var a := speed_keys[i - 1]
+			var span := b.s - a.s
+			return b.factor if span <= 0.0001 else lerpf(a.factor, b.factor, (s - a.s) / span)
+	return speed_keys[speed_keys.size() - 1].factor
 
 
 ## Ground spin at distance s, in degrees per second (see SpinKey).
@@ -52,11 +80,50 @@ func spin_speed_at(s: float) -> float:
 
 ## Seconds from the start of the level to distance s.
 func time_at(s: float) -> float:
-	return SpeedProfile.time_at(s, length, base_speed, speed_ramp)
+	if speed_keys.is_empty():
+		return SpeedProfile.time_at(s, length, base_speed, speed_ramp)
+	_ensure_time_table()
+	var clamped := clampf(s, 0.0, length)
+	var index := mini(int(clamped / TIME_STEP), _time_table.size() - 2)
+	var s0 := index * TIME_STEP
+	# Exact within a step: 1/v is close to linear over half a metre.
+	var t := _time_table[index] + (clamped - s0) / speed_at(s0 + (clamped - s0) * 0.5)
+	return t + maxf(s - length, 0.0) / speed_at(length)
 
 
 func duration() -> float:
-	return SpeedProfile.duration(length, base_speed, speed_ramp)
+	return time_at(length)
+
+
+## Distance reached `seconds` after the start (the inverse of time_at()).
+func s_at_time(seconds: float) -> float:
+	var lo := 0.0
+	var hi := length
+	if seconds >= time_at(length):
+		return length + (seconds - time_at(length)) * speed_at(length)
+	for i in 48:
+		var mid := (lo + hi) * 0.5
+		if time_at(mid) < seconds:
+			lo = mid
+		else:
+			hi = mid
+	return (lo + hi) * 0.5
+
+
+func _ensure_time_table() -> void:
+	var signature := "%f|%f|%f" % [length, base_speed, speed_ramp]
+	for key in speed_keys:
+		signature += "|%f:%f" % [key.s, key.factor]
+	if signature == _time_table_signature:
+		return
+	_time_table_signature = signature
+	var count := int(ceil(length / TIME_STEP)) + 2
+	_time_table.resize(count)
+	_time_table[0] = 0.0
+	for i in range(1, count):
+		# Midpoint rule per step: plenty for timing labels and tests.
+		var mid := (i - 0.5) * TIME_STEP
+		_time_table[i] = _time_table[i - 1] + TIME_STEP / speed_at(mid)
 
 
 func progress_at(s: float) -> float:
@@ -69,6 +136,8 @@ func sort() -> void:
 	holes.sort_custom(func(a: HoleData, b: HoleData) -> bool: return a.s_start < b.s_start)
 	palette.sort_custom(func(a: PaletteStop, b: PaletteStop) -> bool: return a.at < b.at)
 	spin.sort_custom(func(a: SpinKey, b: SpinKey) -> bool: return a.s < b.s)
+	speed_keys.sort_custom(func(a: SpeedKey, b: SpeedKey) -> bool: return a.s < b.s)
+	hints.sort_custom(func(a: LevelHint, b: LevelHint) -> bool: return a.s < b.s)
 
 
 ## Index of the first hole that could still overlap distance `s`.

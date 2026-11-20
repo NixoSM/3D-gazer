@@ -212,6 +212,26 @@ func test_ball_that_drops_into_a_short_hole_hits_the_far_wall_and_bounces_back()
 	assert_true(sim.s < 22.6, "the ball stayed behind the far wall (s = %.2f)" % sim.s)
 
 
+## A fast ball that skims the far edge of a cut pops back out of it, but
+## never higher than the biggest jump: at the top speeds of the later
+## levels the bounce used to fling it through the ceiling.
+func test_pop_off_the_far_edge_never_beats_the_biggest_jump() -> void:
+	var tuning := make_tuning()
+	for speed in [25.0, 40.0, 51.0]:
+		for hole_length in [1.6, 2.4, 3.2, 4.0]:
+			var holes: Array[HoleData] = [HoleData.new(20.0, hole_length, 0.0, TAU)]
+			var level := make_level(holes)
+			level.base_speed = speed
+			level.speed_ramp = 0.0
+			var sim := BallSimulation.new(level, tuning)
+			var highest := 0.0
+			for i in 240:
+				sim.step(1.0 / 120.0, InputFrame.new())
+				highest = maxf(highest, sim.height)
+			assert_true(highest <= tuning.max_jump_height + 0.01,
+				"%.0f m/s over a %.1f m cut: popped %.2f m high" % [speed, hole_length, highest])
+
+
 func test_late_swipe_after_leaving_the_edge_still_jumps() -> void:
 	var holes: Array[HoleData] = [HoleData.new(20.0, 4.0, 0.0, TAU)]
 	var tuning := make_tuning()

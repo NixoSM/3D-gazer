@@ -22,6 +22,9 @@ const FADE_TIME := 0.3
 var state := State.MENU
 var levels: Array[LevelData] = []
 var level_index := 0
+## Next level hint to show in this run (index into LevelData.hints), or -1
+## when hints are off (the level has been finished before).
+var _next_hint := -1
 
 
 func _ready() -> void:
@@ -67,6 +70,15 @@ func _process(delta: float) -> void:
 		session.attract(delta)
 	elif state == State.PLAYING and session.simulation.is_alive():
 		hud.set_spin(session.simulation.spin_rate())
+		_show_hints()
+
+
+## Shows each level hint as the ball reaches it, until the level is done once.
+func _show_hints() -> void:
+	var hints := session.level.hints
+	while _next_hint >= 0 and _next_hint < hints.size() and session.view_s >= hints[_next_hint].s:
+		hud.hint(hints[_next_hint].text)
+		_next_hint += 1
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -168,6 +180,8 @@ func _begin_run() -> void:
 	state = State.PLAYING
 	session.start_run()
 	hud.clear_spin()
+	hud.clear_hint()
+	_next_hint = -1 if Progress.is_completed(levels[level_index].id) else 0
 	var best := Progress.best_progress(levels[level_index].id)
 	var toast := levels[level_index].display_name
 	if session.attempt > 1:

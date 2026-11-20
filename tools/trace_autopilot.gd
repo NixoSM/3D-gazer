@@ -2,12 +2,12 @@ extends SceneTree
 ## Plays a level with the Autopilot and prints what happened: a quick way to
 ## see *where* and *why* a level is hard after editing or regenerating it.
 ##
-##   godot --headless --script res://tools/trace_autopilot.gd -- 02_tide [steering delay s]
+##   godot --headless --script res://tools/trace_autopilot.gd -- 02_bubblegum [steering delay s]
 
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
-	var id: String = args[0] if args.size() > 0 else "01_dawn"
+	var id: String = args[0] if args.size() > 0 else "01_lemonade"
 	var tuning: BallTuning = load("res://resources/ball_tuning.tres")
 	var level := LevelSerializer.load_file("res://levels/%s.json" % id).level
 	var sim := BallSimulation.new(level, tuning)
