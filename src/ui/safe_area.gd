@@ -15,6 +15,10 @@ func _ready() -> void:
 
 
 func _update() -> void:
+	# A screen rebuilt for a new orientation drops its old SafeArea, which
+	# can still hear the resize until it is freed at the end of the frame.
+	if not is_inside_tree():
+		return
 	var window := DisplayServer.window_get_size()
 	var safe := DisplayServer.get_display_safe_area()
 	var viewport := get_viewport_rect().size

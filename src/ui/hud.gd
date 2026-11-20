@@ -12,6 +12,7 @@ var _toast: Label
 var _toast_tween: Tween
 var _hint: Label
 var _hint_tween: Tween
+var _floor_gap: Control
 
 
 func _ready() -> void:
@@ -55,10 +56,17 @@ func _ready() -> void:
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint.modulate.a = 0.0
 	layout.add_child(_hint)
-	var floor_gap := Control.new()
-	floor_gap.custom_minimum_size = Vector2(0, 150)
-	floor_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layout.add_child(floor_gap)
+	_floor_gap = Control.new()
+	_floor_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layout.add_child(_floor_gap)
+	ScreenLayout.changed.connect(_fit)
+	_fit(ScreenLayout.landscape)
+
+
+## In landscape the ball sits lower on a shorter screen, so the hint drops
+## to the bottom edge to stay under it.
+func _fit(landscape: bool) -> void:
+	_floor_gap.custom_minimum_size = Vector2(0, 0 if landscape else 150)
 
 
 ## Shows the spin as chevrons pointing the way the ball is being pushed:

@@ -59,6 +59,17 @@ func _run() -> void:
 		_place(session, world, _main.levels[i].length * 0.5, deg_to_rad(40.0), 0.0)
 		await _frames(25)
 		await _shot("09_level_%d" % (i + 1))
+
+	# Overlays, which have their own portrait and landscape layouts.
+	_main.hud.visible = false
+	_main.pause_screen.visible = true
+	await _frames(5)
+	await _shot("10_pause")
+	_main.pause_screen.visible = false
+	_main.results.present(_main.levels[0].display_name, 3, 4, true)
+	_main.results.visible = true
+	await _frames(5)
+	await _shot("11_results")
 	get_tree().quit(0)
 
 
