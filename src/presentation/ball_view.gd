@@ -87,8 +87,8 @@ func set_radius(radius: float) -> void:
 	hull.rings = 24
 	_outline.mesh = hull
 	# Unit-height tails; scaled to the dive's length each frame.
-	_smear_mesh.top_radius = radius * 0.12
-	_smear_mesh.bottom_radius = radius * 0.86
+	_smear_mesh.top_radius = radius * 0.1
+	_smear_mesh.bottom_radius = radius * 0.62
 	_smear_mesh.height = 1.0
 	_smear_mesh.radial_segments = 24
 	_smear_mesh.rings = 1

@@ -110,7 +110,7 @@ func _shape_smash(sim: BallSimulation, height: float, held: bool) -> void:
 		ball.set_smear(0.0)
 	elif sim.smash_stage == 2:
 		ball.hold_squash(1.55)
-		ball.set_smear(minf(sim.smash_drop_so_far(), 3.0))
+		ball.set_smear(minf(sim.smash_drop_so_far(), 2.4))
 	elif held:
 		ball.hold_squash(0.58)
 		ball.set_smear(0.0)
