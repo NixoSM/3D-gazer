@@ -54,6 +54,10 @@ enum EventType {
 const LOST_DEPTH := 0.02
 ## A wall contact whose normal points less "up" than this is a crash, not a pop.
 const POP_NORMAL := 0.5
+## Fastest (m/s) a lost ball may rebound upwards off the walls of a cut.
+const LOST_REBOUND := 2.0
+## Longest move (m) of one collision slice near the shell.
+const MAX_SLICE := 0.06
 
 
 class SimEvent:
@@ -110,6 +114,8 @@ var _smash_top: bool = false
 var _buffered_jump_strength: float = -1.0
 var _time_since_landing: float = INF
 var _landing_resolved: bool = true
+## The last touchdown ended a jump or a bounce (not a pop off an edge).
+var _landed_from_jump: bool = false
 ## Seconds since the ground went from under a rolling ball (INF = it did not).
 var _time_unsupported: float = INF
 ## Tilt of the current step, for the bounce's take-off direction.
@@ -146,6 +152,7 @@ func reset(start_angle: float = 0.0) -> void:
 	_buffered_jump_strength = -1.0
 	_time_since_landing = INF
 	_landing_resolved = true
+	_landed_from_jump = false
 	_time_unsupported = INF
 	_tilt = 0.0
 	_freeze_left = 0.0
@@ -206,11 +213,44 @@ func jump_height_for_strength(strength: float) -> float:
 ## Advances the simulation by `dt` seconds. Returns what happened.
 func step(dt: float, input: InputFrame) -> Array[SimEvent]:
 	var events: Array[SimEvent] = []
+	# Near the shell a fast ball (a smash dive moves ~0.3 m a step) is moved
+	# in small slices, so it meets an edge where it really touches it, not
+	# wherever the step happened to end: otherwise the same smash could pop,
+	# crash or land depending only on frame timing.
+	var slices := _slices_for(dt)
+	if slices == 1:
+		_step_once(dt, input, events)
+		return events
+	var rest := InputFrame.new(input.tilt)
+	rest.holding = input.holding
+	for i in slices:
+		_step_once(dt / slices, input if i == 0 else rest, events)
+	return events
+
+
+func _slices_for(dt: float) -> int:
+	if phase not in [Phase.AIRBORNE, Phase.FALLING]:
+		return 1
+	var travel := Vector3(forward_speed * 0.25, lateral_speed, vertical_speed).length() * dt
+	# Only near the shell (the cut's walls go TunnelMath.WALL_THICKNESS deep).
+	if height > travel + tuning.ball_radius or height < -TunnelMath.WALL_THICKNESS - 3.0 * tuning.ball_radius - travel:
+		return 1
+	# ...and near the edge of a cut: on open floor a landing is a landing,
+	# and stays exactly as it always was.
+	var margin := tuning.ball_radius + travel * 4.0
+	var s_next := s + forward_speed * dt
+	var angle_next := angle + lateral_speed * dt / level.tunnel_radius
+	if level.floor_distance(s, angle) > margin and level.floor_distance(s_next, angle_next) > margin:
+		return 1
+	return clampi(ceili(travel / MAX_SLICE), 1, 8)
+
+
+func _step_once(dt: float, input: InputFrame, events: Array[SimEvent]) -> void:
 	time += dt
 	_tilt = clampf(input.tilt, -1.0, 1.0)
 	if phase == Phase.FROZEN:
 		_step_frozen(dt, input, events)
-		return events
+		return
 
 	_step_forward(dt)
 	_step_lateral(dt, input.tilt)
@@ -225,10 +265,11 @@ func step(dt: float, input: InputFrame) -> Array[SimEvent]:
 		Phase.FINISHED:
 			_step_finished(dt)
 
-	if phase in [Phase.ROLLING, Phase.AIRBORNE] and s >= level.length:
+	# FROZEN too: a smash that lands on the line finishes the run at once,
+	# not after a hit-stop that would only add to the finish time.
+	if phase in [Phase.ROLLING, Phase.AIRBORNE, Phase.FROZEN] and s >= level.length:
 		phase = Phase.FINISHED
 		events.append(SimEvent.new(EventType.FINISHED, s, angle))
-	return events
 
 
 func _step_forward(dt: float) -> void:
@@ -290,7 +331,7 @@ func _step_rolling(dt: float, input: InputFrame, events: Array[SimEvent]) -> voi
 ## Returns true if the ball jumped.
 func _ground_actions(input: InputFrame, events: Array[SimEvent]) -> bool:
 	var in_grace := not _landing_resolved and _time_since_landing <= tuning.smash_grace_time
-	if input.smash and in_grace and last_jump_height > 0.0 and phase == Phase.ROLLING:
+	if input.smash and in_grace and _landed_from_jump and phase == Phase.ROLLING:
 		# A hair late: the landing becomes the smash's impact.
 		_landing_resolved = true
 		_impact(0.0, false, events)
@@ -329,6 +370,13 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 	if _over_void():
 		# No floor under the centre: the ball keeps dropping, and only the
 		# edges of the cut can stop it.
+		if smash_stage == 2:
+			# A dive is judged where the ball comes down to floor level, not
+			# where its curve first grazes the lip (a hundredth of a second
+			# earlier, often still short of a far edge it is racing onto).
+			if height <= 0.0:
+				_dive_meets_edge(events)
+			return
 		var before := _velocity()
 		var contact := _collide_with_shell()
 		if contact != Vector3.ZERO and contact.z < POP_NORMAL:
@@ -348,6 +396,10 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 	_time_unsupported = INF
 
 	var smashing := smash_stage == 2
+	# Only the landing of a jump (or a bounce) opens the late-smash window:
+	# landing after a pop off an edge, with no jump, must not bounce back to
+	# the height of some jump long ago.
+	var from_jump := _can_smash
 	_can_smash = false
 	smash_stage = 0
 	var landed := SimEvent.new(EventType.LANDED, s, angle)
@@ -367,6 +419,60 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 		phase = Phase.ROLLING
 		_time_since_landing = 0.0
 		_landing_resolved = false
+		_landed_from_jump = from_jump
+
+
+## A smash dive comes down to floor level with its centre over the void.
+## No pinball: at 35-40 m/s a bounce off the lip threw the ball metres up or
+## flung it sideways at up to 25 m/s, and which one happened hung on the
+## exact frame. The rule is plain instead: if the centre is within
+## tuning.smash_edge_catch of the edge, the smash lands on the lip (the
+## ball is set onto it and bounces as from any floor); further out it
+## misses, and drops into the hole clear of the lip, stopped by the wall
+## it was heading for rather than bounced up off its corner.
+func _dive_meets_edge(events: Array[SimEvent]) -> void:
+	var d := level.floor_distance(s, angle)
+	var r := level.tunnel_radius
+	# Racing onto a far edge: where will the ball be by the time it has
+	# sunk the catch depth? If that is on the lip, the smash caught it.
+	var sink_time := tuning.smash_edge_catch / maxf(-vertical_speed, 1.0)
+	var ahead_s := s + forward_speed * sink_time
+	var ahead_angle := angle + lateral_speed * sink_time / r
+	var d_ahead := level.floor_distance(ahead_s, ahead_angle)
+	if d_ahead > d and d_ahead >= -tuning.smash_edge_catch:
+		s = ahead_s
+		angle = TunnelMath.wrap_angle_positive(ahead_angle)
+		d = d_ahead
+	var towards_floor := _floor_gradient()
+	if d < -tuning.smash_edge_catch:
+		var clear := tuning.ball_radius + 0.01
+		if -d < clear:
+			var away := clear + d
+			s -= towards_floor.x * away
+			angle = TunnelMath.wrap_angle_positive(angle - towards_floor.y * away / r)
+			var into := forward_speed * towards_floor.x + lateral_speed * towards_floor.y
+			if into > 0.0:
+				forward_speed -= towards_floor.x * into
+				lateral_speed -= towards_floor.y * into
+		_lose(events)
+		return
+	# Onto the lip, just inside the floor's forgiveness.
+	var shift := -d - tuning.hole_forgiveness * 0.5
+	if shift > 0.0:
+		s += towards_floor.x * shift
+		angle = TunnelMath.wrap_angle_positive(angle + towards_floor.y * shift / r)
+	var impact := -vertical_speed
+	height = 0.0
+	vertical_speed = 0.0
+	_time_unsupported = INF
+	_can_smash = false
+	smash_stage = 0
+	var landed := SimEvent.new(EventType.LANDED, s, angle)
+	landed.height = impact
+	landed.bounce = true
+	landed.chain = smash_chain
+	events.append(landed)
+	_impact(_smash_from, _smash_top, events)
 
 
 ## A swipe down in the air: coil, unless the ball is about to land anyway
@@ -438,6 +544,9 @@ func _step_falling(dt: float, events: Array[SimEvent]) -> void:
 	var before := _velocity()
 	if _collide_with_shell() != Vector3.ZERO:
 		_report_bump(before, events)
+		# A lost ball may knock against the walls of the cut, but it never
+		# hops back up out of the hole: that reads as a save that was not.
+		vertical_speed = minf(vertical_speed, LOST_REBOUND)
 
 
 func _velocity() -> Vector3:

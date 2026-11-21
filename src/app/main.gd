@@ -203,6 +203,11 @@ func _begin_run() -> void:
 
 
 func _pause() -> void:
+	# Only a run in progress pauses. The HUD's button stays on screen while
+	# a fall fades out and before the results appear; pausing then left the
+	# app "playing" behind the results, or the tree paused under them.
+	if state != State.PLAYING:
+		return
 	state = State.PAUSED
 	get_tree().paused = true
 	pause_screen.visible = true
