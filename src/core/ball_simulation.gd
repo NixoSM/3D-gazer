@@ -235,6 +235,13 @@ func _slices_for(dt: float) -> int:
 	# Only near the shell (the cut's walls go TunnelMath.WALL_THICKNESS deep).
 	if height > travel + tuning.ball_radius or height < -TunnelMath.WALL_THICKNESS - 3.0 * tuning.ball_radius - travel:
 		return 1
+	# ...and near the edge of a cut: on open floor a landing is a landing,
+	# and stays exactly as it always was.
+	var margin := tuning.ball_radius + travel * 4.0
+	var s_next := s + forward_speed * dt
+	var angle_next := angle + lateral_speed * dt / level.tunnel_radius
+	if level.floor_distance(s, angle) > margin and level.floor_distance(s_next, angle_next) > margin:
+		return 1
 	return clampi(ceili(travel / MAX_SLICE), 1, 8)
 
 

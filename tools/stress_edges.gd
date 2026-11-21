@@ -118,6 +118,8 @@ func _sweep(edge: String, totals: Dictionary) -> void:
 						configs += 1
 						if seen.size() > 1:
 							flips += 1
+							if verbose:
+								print("    flip o=%+.2f v=%.0f str=%.1f tilt=%+.0f spin=%.0f: %s" % [offset, speed, strength, tilt, spin, seen.keys()])
 	var bins := by_d.keys()
 	bins.sort()
 	print("  floor distance of the ball's centre where it reaches floor level (- = over the void):")
@@ -266,8 +268,17 @@ func _dive_offset(level: LevelData, strength: float, tilt: float, phase: int) ->
 		events = sim.step(DT, InputFrame.new(tilt))
 	var s0 := sim.s
 	var a0 := sim.angle
+	# Where exactly the ball crosses floor level (between steps: no holes
+	# here, so the step is not sliced; interpolate).
+	var prev := Vector3(sim.s, sim.angle, sim.height)
+	var vs := sim.vertical_speed
 	while sim.phase == P.AIRBORNE:
+		prev = Vector3(sim.s, sim.angle, sim.height)
+		vs = sim.vertical_speed
 		sim.step(DT, InputFrame.new(tilt))
-	var result := Vector2(sim.s - s0, TunnelMath.angle_difference(a0, sim.angle))
+	var fraction := clampf(prev.z / maxf(-(vs - tuning.gravity * DT) * DT, 0.0001), 0.0, 1.0)
+	var cross_s := prev.x + sim.forward_speed * DT * fraction
+	var cross_a := prev.y + TunnelMath.angle_difference(prev.y, sim.angle) * fraction
+	var result := Vector2(cross_s - s0, TunnelMath.angle_difference(a0, cross_a))
 	_aim_cache[key] = result
 	return result
