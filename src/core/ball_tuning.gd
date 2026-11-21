@@ -51,8 +51,10 @@ extends Resource
 @export_range(0.0, 1.0) var smash_top_fraction: float = 0.7
 ## A dive that comes down on the edge of a hole lands on the lip if the
 ## ball's centre is at most this far (m) past the edge, and drops in if it
-## is further out. Half the ball's radius: most of the ball is over floor.
-@export var smash_edge_catch: float = 0.21
+## is further out. 0.3 m, about 70% of the radius: a third of the ball's
+## width must be over floor. A full radius (any overlap at all) looked
+## absurd, a ball barely grazing the lip and still landing on it.
+@export var smash_edge_catch: float = 0.3
 ## A swipe down this long (s) after an ordinary landing still bounces.
 @export var smash_grace_time: float = 0.1
 ## Hit-stop: on impact the world freezes this long (s) before the bounce,

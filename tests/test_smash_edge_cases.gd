@@ -234,7 +234,7 @@ func dive_outcome(sim: BallSimulation) -> String:
 
 func test_a_smash_that_overlaps_the_lip_enough_lands_on_it() -> void:
 	for speed in [20.0, 80.0]:
-		for past in [0.0, 0.1, 0.18]:
+		for past in [0.0, 0.1, 0.25]:
 			# The side edge sits at angle 0.6 rad; past = centre over the void.
 			var sim := diving_at(edge_level(speed), 103.0, 0.6 - past / 4.0)
 			assert_eq(dive_outcome(sim), "smash", "%.0f m/s, centre %.2f m past the side edge" % [speed, past])
@@ -244,7 +244,7 @@ func test_a_smash_that_overlaps_the_lip_enough_lands_on_it() -> void:
 
 func test_a_smash_that_misses_the_lip_drops_in_and_stays_in() -> void:
 	for speed in [20.0, 80.0]:
-		for past in [0.3, 0.4, 0.6]:
+		for past in [0.38, 0.5, 0.8]:
 			var sim := diving_at(edge_level(speed), 103.0, 0.6 - past / 4.0)
 			assert_eq(dive_outcome(sim), "fell", "%.0f m/s, centre %.2f m past the side edge" % [speed, past])
 			var peak := sim.height
@@ -257,7 +257,7 @@ func test_a_smash_that_misses_the_lip_drops_in_and_stays_in() -> void:
 ## Racing onto the far edge: short of it by a little at floor level, but
 ## the forward speed puts the ball on the lip within the catch depth.
 func test_a_fast_smash_just_short_of_the_far_edge_is_caught() -> void:
-	var sim := diving_at(edge_level(80.0), 106.0 - 0.5, 0.0)
+	var sim := diving_at(edge_level(80.0), 106.0 - 0.75, 0.0)
 	assert_eq(dive_outcome(sim), "smash")
 
 
@@ -281,7 +281,7 @@ func test_no_dive_onto_any_edge_pops_or_flings_the_ball() -> void:
 func test_an_edge_smash_does_not_depend_on_frame_timing() -> void:
 	var tuning := make_tuning()
 	for speed in [20.0, 80.0]:
-		for past in [-0.2, -0.1, 0.05, 0.12, 0.3, 0.45, 0.7]:
+		for past in [-0.2, -0.1, 0.05, 0.12, 0.3, 0.55, 0.7]:
 			var outcomes := {}
 			for phase in 8:
 				var sim := diving_at(edge_level(speed), 103.0, 0.6 - past / 4.0, phase / 8.0)
