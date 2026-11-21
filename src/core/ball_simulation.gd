@@ -110,6 +110,8 @@ var _smash_top: bool = false
 var _buffered_jump_strength: float = -1.0
 var _time_since_landing: float = INF
 var _landing_resolved: bool = true
+## The last touchdown ended a jump or a bounce (not a pop off an edge).
+var _landed_from_jump: bool = false
 ## Seconds since the ground went from under a rolling ball (INF = it did not).
 var _time_unsupported: float = INF
 ## Tilt of the current step, for the bounce's take-off direction.
@@ -146,6 +148,7 @@ func reset(start_angle: float = 0.0) -> void:
 	_buffered_jump_strength = -1.0
 	_time_since_landing = INF
 	_landing_resolved = true
+	_landed_from_jump = false
 	_time_unsupported = INF
 	_tilt = 0.0
 	_freeze_left = 0.0
@@ -225,7 +228,9 @@ func step(dt: float, input: InputFrame) -> Array[SimEvent]:
 		Phase.FINISHED:
 			_step_finished(dt)
 
-	if phase in [Phase.ROLLING, Phase.AIRBORNE] and s >= level.length:
+	# FROZEN too: a smash that lands on the line finishes the run at once,
+	# not after a hit-stop that would only add to the finish time.
+	if phase in [Phase.ROLLING, Phase.AIRBORNE, Phase.FROZEN] and s >= level.length:
 		phase = Phase.FINISHED
 		events.append(SimEvent.new(EventType.FINISHED, s, angle))
 	return events
@@ -290,7 +295,7 @@ func _step_rolling(dt: float, input: InputFrame, events: Array[SimEvent]) -> voi
 ## Returns true if the ball jumped.
 func _ground_actions(input: InputFrame, events: Array[SimEvent]) -> bool:
 	var in_grace := not _landing_resolved and _time_since_landing <= tuning.smash_grace_time
-	if input.smash and in_grace and last_jump_height > 0.0 and phase == Phase.ROLLING:
+	if input.smash and in_grace and _landed_from_jump and phase == Phase.ROLLING:
 		# A hair late: the landing becomes the smash's impact.
 		_landing_resolved = true
 		_impact(0.0, false, events)
@@ -335,6 +340,11 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 			# Side-on into the edge of the cut: a crash, the run is over.
 			_lose(events)
 			_report_bump(before, events)
+		elif contact != Vector3.ZERO and smash_stage == 2:
+			# The dive clipped the edge of the cut and popped off it: that
+			# was its impact, so the next landing is an ordinary one (it
+			# must not be a hit-stop and a speed-up out of nowhere).
+			smash_stage = 0
 		elif height + tuning.ball_radius < -LOST_DEPTH:
 			_lose(events)
 		return
@@ -348,6 +358,10 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 	_time_unsupported = INF
 
 	var smashing := smash_stage == 2
+	# Only the landing of a jump (or a bounce) opens the late-smash window:
+	# landing after a pop off an edge, with no jump, must not bounce back to
+	# the height of some jump long ago.
+	var from_jump := _can_smash
 	_can_smash = false
 	smash_stage = 0
 	var landed := SimEvent.new(EventType.LANDED, s, angle)
@@ -367,6 +381,7 @@ func _step_airborne(dt: float, input: InputFrame, events: Array[SimEvent]) -> vo
 		phase = Phase.ROLLING
 		_time_since_landing = 0.0
 		_landing_resolved = false
+		_landed_from_jump = from_jump
 
 
 ## A swipe down in the air: coil, unless the ball is about to land anyway

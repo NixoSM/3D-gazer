@@ -8,14 +8,26 @@ extends Node
 
 var tilt_reader := TiltReader.new()
 var gestures := GestureRecognizer.new()
-## When false, gestures are ignored (menus, pause).
-var enabled := false
+## When false, gestures are ignored (menus, pause). Any change starts the
+## gestures afresh: touches lifted while input was off are never seen.
+var enabled := false:
+	set(value):
+		if value != enabled:
+			gestures.reset()
+		enabled = value
 
 var _tilt := 0.0
 
 
 func _ready() -> void:
 	_register_desktop_actions()
+
+
+func _notification(what: int) -> void:
+	# Paused, this node gets no touches at all (a finger lifted meanwhile is
+	# lost), and a swipe queued just before the pause must not fire after it.
+	if what in [NOTIFICATION_PAUSED, NOTIFICATION_UNPAUSED]:
+		gestures.reset()
 
 
 func _process(delta: float) -> void:

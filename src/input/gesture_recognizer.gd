@@ -56,6 +56,16 @@ func is_holding() -> bool:
 	return _active_index != -1 and not _fired
 
 
+## Forgets everything, the finger being tracked included. For moments when
+## touch events stop arriving (input off after a fall, the game paused, the
+## app in the background): the lift of that finger would never be seen, and
+## the stale finger would swallow the next touch and keep "holding" on.
+func reset() -> void:
+	consume()
+	_active_index = -1
+	_fired = false
+
+
 ## Clears the one-shot gestures once they have been handed to the simulation.
 func consume() -> void:
 	smashed = false
