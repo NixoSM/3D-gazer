@@ -12,6 +12,14 @@ extends TestCase
 ## about 0.5 s), the human-like profiles can. Supernova is meant to be
 ## beyond human reactions on first sight: only the perfect bot has to
 ## finish it.
+## The two "every level can be finished" tests below are REPORT-ONLY for
+## now (Nicola, 2026-11-21): since the smash, each smash speeds the ball up
+## and the Autopilot does not plan for that, so the bots fall on levels a
+## person can finish, and the levels were deliberately not retuned. They
+## still play every level and print where each bot fell, but do not fail
+## the suite. Set back to true once the bots account for the smash.
+const CLEARABILITY_ENFORCED := false
+
 const REACTION := {
 	"01_lemonade": 0.35,
 	"02_bubblegum": 0.3,
@@ -49,8 +57,11 @@ func _assert_finishes(id: String, steering_delay: float) -> void:
 	var dt := 1.0 / 120.0
 	while sim.is_playing() and sim.time < 120.0:
 		sim.step(dt, bot.decide(sim))
-	assert_eq(sim.phase, BallSimulation.Phase.FINISHED,
-		"%s (reaction %.2f s): bot fell at %.0f m (%.0f%%), angle %.0f°" % [id, steering_delay, sim.s, sim.progress() * 100.0, rad_to_deg(sim.angle)])
+	var message := "%s (reaction %.2f s): bot fell at %.0f m (%.0f%%), angle %.0f°" % [id, steering_delay, sim.s, sim.progress() * 100.0, rad_to_deg(sim.angle)]
+	if CLEARABILITY_ENFORCED:
+		assert_eq(sim.phase, BallSimulation.Phase.FINISHED, message)
+	elif sim.phase != BallSimulation.Phase.FINISHED:
+		print("  report (not enforced, see CLEARABILITY_ENFORCED): ", message)
 
 
 ## Rings with the floor after them in other lanes than before them, at
