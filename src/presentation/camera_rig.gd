@@ -23,14 +23,25 @@ extends Camera3D
 ## view only distorts more), up to `max_fov`.
 @export var fast_fov_per_speed := 0.5
 @export var max_fov := 98.0
+## In landscape, keeping the portrait's vertical angle would open the view
+## sideways to 107° at rest and over 135° at top speed: a fisheye. The
+## vertical angle is narrowed by aspect^-squeeze instead, which keeps the
+## ball, the floor ahead and the walls streaming past at the edges.
+@export var landscape_squeeze := 0.35
 ## Camera rumble from speed, in metres, reached at 24 m/s. Starts at 15 m/s.
 @export var speed_rumble := 0.022
+
+const DIP_STIFFNESS := 210.0
+const DIP_DAMPING := 13.0
 
 var _height := 0.0
 var _focus_s := 0.0
 var _punch := 0.0
 var _shake := 0.0
 var _rumble_phase := 0.0
+## A spring that drops the camera towards the floor and back: the thud of a smash.
+var _dip := 0.0
+var _dip_velocity := 0.0
 
 
 func snap(s: float) -> void:
@@ -38,6 +49,8 @@ func snap(s: float) -> void:
 	_height = 0.0
 	_punch = 0.0
 	_shake = 0.0
+	_dip = 0.0
+	_dip_velocity = 0.0
 
 
 func update_view(delta: float, s: float, angle: float, height: float, tunnel_radius: float,
@@ -49,7 +62,10 @@ func update_view(delta: float, s: float, angle: float, height: float, tunnel_rad
 		_focus_s = s
 	_height = lerpf(_height, maxf(height, 0.0) * jump_follow, 1.0 - exp(-10.0 * delta))
 
-	var eye := TunnelMath.point(_focus_s - follow_distance, angle, tunnel_radius - camera_height - _height)
+	var dip := step_dip(_dip, _dip_velocity, delta)
+	_dip = dip.x
+	_dip_velocity = dip.y
+	var eye := TunnelMath.point(_focus_s - follow_distance, angle, tunnel_radius - camera_height - _height + _dip)
 	var target := TunnelMath.point(_focus_s + look_ahead, angle, tunnel_radius - look_height - _height * 0.6)
 	if _shake > 0.0:
 		eye += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * _shake * 0.08
@@ -63,7 +79,23 @@ func update_view(delta: float, s: float, angle: float, height: float, tunnel_rad
 	look_at_from_position(eye, target, TunnelMath.inward(angle))
 
 	_punch = lerpf(_punch, 0.0, 1.0 - exp(-7.0 * delta))
-	fov = fov_for_speed(speed) + _punch
+	var view := get_viewport().get_visible_rect().size
+	fov = fov_for_aspect(fov_for_speed(speed) + _punch, view.x / maxf(view.y, 1.0), landscape_squeeze)
+
+
+## Advances the dip spring by `delta`: (dip, velocity) in, out. In small
+## fixed steps: one long frame (a hitch, say the first smash compiling its
+## shaders) in a single Euler step would fling the camera metres through
+## the floor, since the spring is stiff.
+static func step_dip(dip: float, velocity: float, delta: float) -> Vector2:
+	const STEP := 1.0 / 240.0
+	var left := minf(delta, 0.25)
+	while left > 0.0:
+		var h := minf(left, STEP)
+		velocity += (-dip * DIP_STIFFNESS - velocity * DIP_DAMPING) * h
+		dip += velocity * h
+		left -= h
+	return Vector2(dip, velocity)
 
 
 func fov_for_speed(speed: float) -> float:
@@ -74,9 +106,28 @@ func fov_for_speed(speed: float) -> float:
 	return clampf(fov_now, fov_at_12, max_fov)
 
 
-## Brief FOV widening, for echo jumps.
+## The vertical FOV to use on a screen of this aspect (width / height).
+## Portrait screens get the designed value unchanged.
+static func fov_for_aspect(tall_fov: float, aspect: float, squeeze: float) -> float:
+	if aspect <= 1.0:
+		return tall_fov
+	var half := tan(deg_to_rad(tall_fov) * 0.5) * pow(aspect, -squeeze)
+	return rad_to_deg(2.0 * atan(half))
+
+
+## Brief FOV widening (a bounce, the finish).
 func punch(amount: float) -> void:
 	_punch = maxf(_punch, amount)
+
+
+## Sets the FOV offset outright; negative zooms in for an instant (an impact).
+func snap_fov(amount: float) -> void:
+	_punch = amount
+
+
+## Knocks the camera towards the floor (metres per second of kick); it springs back.
+func dip(amount: float) -> void:
+	_dip_velocity += amount
 
 
 func shake(amount: float) -> void:

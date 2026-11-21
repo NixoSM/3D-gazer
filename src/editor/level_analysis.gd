@@ -190,7 +190,7 @@ func _run_bot(data: Dictionary, index: int, trace: BotTrace, snapshot: Dictionar
 			next_snapshot += SNAPSHOT_EVERY
 		for event in sim.step(STEP, bot.decide(sim)):
 			if event.type == BallSimulation.EventType.JUMPED:
-				trace.marks.append(Vector3(event.s, event.angle, Mark.ECHO if event.echo else Mark.JUMP))
+				trace.marks.append(Vector3(event.s, event.angle, Mark.ECHO if event.bounce else Mark.JUMP))
 		var airborne := sim.phase != BallSimulation.Phase.ROLLING
 		if sim.s - last_point_s >= 0.4 or airborne != was_airborne:
 			trace.points.append(Vector3(sim.s, sim.angle, 1.0 if airborne else 0.0))

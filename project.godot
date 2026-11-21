@@ -24,6 +24,7 @@ general/ios/mix_with_others=true
 Settings="*res://src/app/settings.gd"
 Progress="*res://src/app/progress.gd"
 Platform="*res://src/platform/platform_services.gd"
+ScreenLayout="*res://src/app/screen_layout.gd"
 
 [display]
 
@@ -39,7 +40,7 @@ window/size/window_height_override.level_editor=0
 window/stretch/mode.level_editor="disabled"
 window/dpi/allow_hidpi.level_editor=true
 window/stretch/aspect="expand"
-window/handheld/orientation=1
+window/handheld/orientation=6
 window/ios/hide_home_indicator=true
 window/ios/hide_status_bar=true
 window/ios/suppress_ui_gesture=true

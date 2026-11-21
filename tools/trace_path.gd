@@ -27,7 +27,7 @@ func _init() -> void:
 		var names := []
 		for e in events:
 			var name: String = BallSimulation.EventType.keys()[e.type]
-			if e.type == BallSimulation.EventType.JUMPED and e.echo:
+			if e.type == BallSimulation.EventType.JUMPED and e.bounce:
 				name = "ECHO"
 			names.append(name)
 		if step % 3 == 0 or not names.is_empty():

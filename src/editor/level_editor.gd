@@ -320,7 +320,7 @@ Drag a hole to move it, the yellow squares to resize, the pink dot to twist it. 
 Spin: in the inspector, a direction, a speed and how much it speeds up by the finish.
 Scroll to move · %s+scroll to zoom · Shift+scroll to turn the tunnel · middle-drag to pan.
 
-[b]Playing[/b]  Double-click anywhere on the strip to play from there. F5 plays from the start, B lets the quick bot play from the mouse. A/D or arrows tilt, W hops, Space jumps big, E echoes, Esc stops. A fall is marked on the strip and you restart from the same spot.
+[b]Playing[/b]  Double-click anywhere on the strip to play from there. F5 plays from the start, B lets the quick bot play from the mouse. A/D or arrows tilt, W hops, Space jumps big, S or Down smashes, Esc stops. A fall is marked on the strip and you restart from the same spot.
 
 [b]Files[/b]  Levels are small .json files: send them to each other, or put them in the game's levels/ folder and use File > Add to the game's level list.""" % [mod, mod, mod]
 

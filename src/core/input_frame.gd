@@ -10,17 +10,17 @@ extends RefCounted
 var tilt: float = 0.0
 ## Jump request in [0, 1] (size of the swipe), or -1 for "no jump this step".
 var jump_strength: float = -1.0
-## True if the player tapped during this step (used for echo jumps).
-var tap: bool = false
-## True while a finger is down and could still become a swipe. The echo
-## hit-stop waits for it (up to a limit) so a swipe can reshape the jump.
+## True if the player swiped down during this step (the smash).
+var smash: bool = false
+## True while a finger is down and could still become a swipe. The smash
+## hit-stop waits for it (up to a limit) so a swipe can reshape the bounce.
 var holding: bool = false
 
 
-func _init(p_tilt: float = 0.0, p_jump_strength: float = -1.0, p_tap: bool = false) -> void:
+func _init(p_tilt: float = 0.0, p_jump_strength: float = -1.0, p_smash: bool = false) -> void:
 	tilt = p_tilt
 	jump_strength = p_jump_strength
-	tap = p_tap
+	smash = p_smash
 
 
 func has_jump() -> bool:

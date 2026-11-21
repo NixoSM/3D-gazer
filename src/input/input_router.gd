@@ -8,14 +8,26 @@ extends Node
 
 var tilt_reader := TiltReader.new()
 var gestures := GestureRecognizer.new()
-## When false, gestures are ignored (menus, pause).
-var enabled := false
+## When false, gestures are ignored (menus, pause). Any change starts the
+## gestures afresh: touches lifted while input was off are never seen.
+var enabled := false:
+	set(value):
+		if value != enabled:
+			gestures.reset()
+		enabled = value
 
 var _tilt := 0.0
 
 
 func _ready() -> void:
 	_register_desktop_actions()
+
+
+func _notification(what: int) -> void:
+	# Paused, this node gets no touches at all (a finger lifted meanwhile is
+	# lost), and a swipe queued just before the pause must not fire after it.
+	if what in [NOTIFICATION_PAUSED, NOTIFICATION_UNPAUSED]:
+		gestures.reset()
 
 
 func _process(delta: float) -> void:
@@ -25,8 +37,10 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not enabled:
 		return
-	var height := get_viewport().get_visible_rect().size.y
-	if gestures.handle(event, height):
+	# Swipes are measured against the long side: the same physical swipe
+	# gives the same jump in portrait and landscape.
+	var view := get_viewport().get_visible_rect().size
+	if gestures.handle(event, maxf(view.x, view.y)):
 		get_viewport().set_input_as_handled()
 		return
 	# Desktop shortcuts mirror the touch gestures.
@@ -34,8 +48,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		gestures.swipe_strength = 0.45
 	elif event.is_action_pressed(&"jump_big"):
 		gestures.swipe_strength = 1.0
-	elif event.is_action_pressed(&"echo"):
-		gestures.tapped = true
+	elif event.is_action_pressed(&"smash"):
+		gestures.smashed = true
 
 
 func set_level_here() -> float:
@@ -52,7 +66,7 @@ func current_tilt() -> float:
 
 ## The next InputFrame. One-shot gestures are consumed by this call.
 func take_frame() -> InputFrame:
-	var frame := InputFrame.new(_tilt, gestures.swipe_strength if enabled else -1.0, gestures.tapped and enabled)
+	var frame := InputFrame.new(_tilt, gestures.swipe_strength if enabled else -1.0, gestures.smashed and enabled)
 	frame.holding = enabled and gestures.is_holding()
 	gestures.consume()
 	return frame
@@ -66,7 +80,7 @@ func _register_desktop_actions() -> void:
 		&"tilt_right": [KEY_D, KEY_RIGHT],
 		&"jump_small": [KEY_W, KEY_UP],
 		&"jump_big": [KEY_SPACE],
-		&"echo": [KEY_E, KEY_SHIFT],
+		&"smash": [KEY_S, KEY_DOWN, KEY_E, KEY_SHIFT],
 		&"pause": [KEY_ESCAPE, KEY_P],
 	}
 	for action in bindings:

@@ -50,12 +50,12 @@ func build(tuning: BallTuning) -> LevelData:
 	b.gate(25.55, 0.4, -40.0, 115.0)
 
 	# --- Echo (27 - 37 s) --------------------------------------------------------------
-	b.hint(26.8, "tap as you land to echo")
+	b.hint(26.8, "swipe down to smash and bounce")
 	var t := _echo_run(b, 27.8, 3, 0.36)
 	t = _echo_run(b, t + 1.0, 5, 0.34)
 	# Pads: the floor between rings is only an island, a little further
 	# round each time. Tilt during the echo to aim the bounce.
-	b.hint(t + 0.3, "tilt as you echo to aim")
+	b.hint(t + 0.3, "tilt as you bounce to aim")
 	t = _pad_run(b, t + 1.2, [-40.0, -15.0, 15.0, 40.0], 120.0, 0.34)
 
 	# --- The tunnel turns (37 - 47 s) ------------------------------------------------

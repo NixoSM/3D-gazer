@@ -49,15 +49,26 @@ func _ready() -> void:
 ## Developer switches, passed after `--` on the command line:
 ##   --autoplay        the Autopilot plays (great with --write-movie)
 ##   --level=N         start level N (1-based) immediately
+##   --smash-demo      that level without holes, smashed from the top (recordings)
 func _apply_command_line() -> void:
 	var autoplay := false
+	var smash_demo := false
 	var start_level := -1
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--autoplay":
 			autoplay = true
+		elif arg == "--smash-demo":
+			smash_demo = true
 		elif arg.begins_with("--level="):
 			start_level = int(arg.get_slice("=", 1)) - 1
-	if autoplay:
+	if smash_demo:
+		var demo_level := levels[maxi(start_level, 0)]
+		demo_level.holes.clear()
+		demo_level.hints.clear()
+		demo_level.sort()
+		session.autopilot = load("res://tools/smash_demo_pilot.gd").new(demo_level, session.tuning)
+		start_level = maxi(start_level, 0)
+	elif autoplay:
 		session.autopilot = Autopilot.new(levels[level_index], session.tuning)
 		if start_level < 0:
 			start_level = level_index
@@ -154,6 +165,7 @@ func _show_menu() -> void:
 			"completed": Progress.is_completed(levels[i].id),
 			"best_chain": Progress.best_chain(levels[i].id),
 		})
+	ScreenLayout.unlock()
 	menu.populate(entries)
 	menu.visible = true
 	hud.visible = false
@@ -178,6 +190,7 @@ func _begin_run() -> void:
 	world.reset_view()
 	world.tunnel.set_best_marker(_best_marker_s())
 	state = State.PLAYING
+	ScreenLayout.lock_for_play()
 	session.start_run()
 	hud.clear_spin()
 	hud.clear_hint()
@@ -190,15 +203,22 @@ func _begin_run() -> void:
 
 
 func _pause() -> void:
+	# Only a run in progress pauses. The HUD's button stays on screen while
+	# a fall fades out and before the results appear; pausing then left the
+	# app "playing" behind the results, or the tree paused under them.
+	if state != State.PLAYING:
+		return
 	state = State.PAUSED
 	get_tree().paused = true
 	pause_screen.visible = true
+	ScreenLayout.unlock()
 
 
 func _resume() -> void:
 	get_tree().paused = false
 	pause_screen.visible = false
 	state = State.PLAYING
+	ScreenLayout.lock_for_play()
 
 
 ## Fade out, reset, fade in, go. `immediate` skips the hold after a fall.
@@ -228,10 +248,14 @@ func _on_run_failed(progress: float) -> void:
 func _on_run_completed() -> void:
 	var level := levels[level_index]
 	Progress.record_attempt(level.id, 1.0, true, session.longest_chain)
+	var finish_time := session.simulation.time
+	var fastest := Progress.record_time(level.id, finish_time)
 	state = State.RESULTS
 	var tween := create_tween()
 	tween.tween_interval(1.8)
 	tween.tween_callback(func() -> void:
-		results.present(level.display_name, session.attempt, session.longest_chain, level_index + 1 < levels.size())
+		results.present(level.display_name, session.attempt, session.longest_chain, level_index + 1 < levels.size(),
+			finish_time, Progress.best_time(level.id), fastest)
 		results.visible = true
-		hud.visible = false)
+		hud.visible = false
+		ScreenLayout.unlock())

@@ -18,7 +18,7 @@ func _init() -> void:
 	while sim.is_playing() and sim.time < 120.0:
 		for e in sim.step(1.0 / 120.0, bot.decide(sim)):
 			log.append("%6.2fs  %7.2fm  %-12s angle %5.0f°  height %.2f%s" % [sim.time, e.s,
-				BallSimulation.EventType.keys()[e.type], rad_to_deg(e.angle), e.height, "  echo" if e.echo else ""])
+				BallSimulation.EventType.keys()[e.type], rad_to_deg(e.angle), e.height, "  bounce" if e.bounce else ""])
 	for line in log.slice(maxi(log.size() - 12, 0)):
 		print(line)
 	print("\nresult: %s at %.0f m (%.0f%%)" % [BallSimulation.Phase.keys()[sim.phase], sim.s, sim.progress() * 100.0])
