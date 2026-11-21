@@ -49,6 +49,10 @@ extends Resource
 ## A smash started at least this share of the jump's height up counts as
 ## "from the top": a bigger hit.
 @export_range(0.0, 1.0) var smash_top_fraction: float = 0.7
+## A dive that comes down on the edge of a hole lands on the lip if the
+## ball's centre is at most this far (m) past the edge, and drops in if it
+## is further out. Half the ball's radius: most of the ball is over floor.
+@export var smash_edge_catch: float = 0.21
 ## A swipe down this long (s) after an ordinary landing still bounces.
 @export var smash_grace_time: float = 0.1
 ## Hit-stop: on impact the world freezes this long (s) before the bounce,

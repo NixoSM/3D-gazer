@@ -183,3 +183,107 @@ static func _drag(index: int, position: Vector2) -> InputEventScreenDrag:
 	e.index = index
 	e.position = position
 	return e
+
+
+# --- Smashing onto the edge of a hole -------------------------------------
+# Every permutation is swept by tools/stress_edges.gd; these pin the rule.
+
+## A level with one hole (s 100-106, 1.2 rad wide around angle 0) at `speed`.
+func edge_level(speed: float, spin: float = 0.0) -> LevelData:
+	var holes: Array[HoleData] = [HoleData.new(100.0, 6.0, 0.0, 1.2)]
+	var level := make_level(holes)
+	level.speed_ramp = 0.0
+	level.base_speed = speed
+	if spin != 0.0:
+		var keys: Array[SpinKey] = [SpinKey.new(0.0, spin)]
+		level.spin = keys
+	return level
+
+
+## A ball mid-dive that will reach floor level over (s, angle), `phase`
+## splitting the last step differently.
+func diving_at(level: LevelData, s: float, angle: float, phase: float = 0.0) -> BallSimulation:
+	var sim := BallSimulation.new(level, make_tuning())
+	var drop := 0.6 + phase * 0.33
+	var fall_time := drop / 40.0
+	sim.place(s - level.base_speed * fall_time, angle)
+	sim.phase = P.AIRBORNE
+	sim.smash_stage = 2
+	sim.last_jump_height = 2.0
+	sim._can_smash = true
+	sim._smash_from = 2.0
+	sim.height = drop
+	sim.vertical_speed = -40.0
+	return sim
+
+
+## What became of the dive: "smash" (landed and bounced), "fell", or "pop"
+## (bounced up off the edge without a smash: the old pinball).
+func dive_outcome(sim: BallSimulation) -> String:
+	for i in 120:
+		var events := sim.step(DT, InputFrame.new())
+		for e in events:
+			if e.type == E.SMASH_HIT:
+				return "smash"
+		if not sim.is_alive():
+			return "fell"
+		if sim.phase == P.AIRBORNE and sim.vertical_speed > 0.0:
+			return "pop"
+	return "other"
+
+
+func test_a_smash_that_overlaps_the_lip_enough_lands_on_it() -> void:
+	for speed in [20.0, 80.0]:
+		for past in [0.0, 0.1, 0.18]:
+			# The side edge sits at angle 0.6 rad; past = centre over the void.
+			var sim := diving_at(edge_level(speed), 103.0, 0.6 - past / 4.0)
+			assert_eq(dive_outcome(sim), "smash", "%.0f m/s, centre %.2f m past the side edge" % [speed, past])
+			assert_true(sim.is_alive())
+			assert_false(sim.level.is_hole(sim.s, sim.angle, sim.tuning.hole_forgiveness), "the ball sits on the lip")
+
+
+func test_a_smash_that_misses_the_lip_drops_in_and_stays_in() -> void:
+	for speed in [20.0, 80.0]:
+		for past in [0.3, 0.4, 0.6]:
+			var sim := diving_at(edge_level(speed), 103.0, 0.6 - past / 4.0)
+			assert_eq(dive_outcome(sim), "fell", "%.0f m/s, centre %.2f m past the side edge" % [speed, past])
+			var peak := sim.height
+			for i in 120:
+				sim.step(DT, InputFrame.new())
+				peak = maxf(peak, sim.height)
+			assert_true(peak < 0.05, "it never hops back up out of the hole (%.2f m)" % peak)
+
+
+## Racing onto the far edge: short of it by a little at floor level, but
+## the forward speed puts the ball on the lip within the catch depth.
+func test_a_fast_smash_just_short_of_the_far_edge_is_caught() -> void:
+	var sim := diving_at(edge_level(80.0), 106.0 - 0.5, 0.0)
+	assert_eq(dive_outcome(sim), "smash")
+
+
+func test_no_dive_onto_any_edge_pops_or_flings_the_ball() -> void:
+	var tuning := make_tuning()
+	for speed in [20.0, 40.0, 80.0]:
+		for spin in [0.0, 60.0]:
+			var level := edge_level(speed, spin)
+			var cap := tuning.max_lateral_speed + absf(level.spin_speed_at(0.0)) + 0.01
+			for k in range(-20, 21):
+				var past := k * 0.04
+				for target in [Vector2(103.0, 0.6 - past / 4.0), Vector2(100.0 + past, 0.0), Vector2(106.0 - past, 0.0)]:
+					var sim := diving_at(level, target.x, target.y)
+					var outcome := dive_outcome(sim)
+					assert_true(outcome != "pop", "%.0f m/s spin %.0f at %s: popped off the edge" % [speed, spin, target])
+					assert_true(absf(sim.lateral_speed) <= cap, "%.0f m/s at %s: flung sideways at %.1f m/s" % [speed, target, sim.lateral_speed])
+
+
+## Away from the catch line itself, where the ball comes down decides the
+## outcome, not how the last frame happened to be split.
+func test_an_edge_smash_does_not_depend_on_frame_timing() -> void:
+	var tuning := make_tuning()
+	for speed in [20.0, 80.0]:
+		for past in [-0.2, -0.1, 0.05, 0.12, 0.3, 0.45, 0.7]:
+			var outcomes := {}
+			for phase in 8:
+				var sim := diving_at(edge_level(speed), 103.0, 0.6 - past / 4.0, phase / 8.0)
+				outcomes[dive_outcome(sim)] = true
+			assert_eq(outcomes.size(), 1, "%.0f m/s, %.2f m past the edge: %s" % [speed, past, outcomes.keys()])
