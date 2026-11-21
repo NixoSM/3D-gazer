@@ -41,6 +41,8 @@ func _run() -> void:
 	]
 	for m in moments:
 		_place(session, world, m[1], m[2], m[3])
+		if m[0] == "03_holes_ahead":
+			_main.hud.hint("swipe down to smash and bounce", 5.0)
 		await _frames(20)
 		await _shot(m[0])
 

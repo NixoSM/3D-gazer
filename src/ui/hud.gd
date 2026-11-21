@@ -63,10 +63,13 @@ func _ready() -> void:
 	_fit(ScreenLayout.landscape)
 
 
-## In landscape the ball sits lower on a shorter screen, so the hint drops
-## to the bottom edge to stay under it.
+## In landscape the ball fills the bottom of a short screen and the patterns
+## come down the middle, so the hint moves to the empty wall on the left.
 func _fit(landscape: bool) -> void:
-	_floor_gap.custom_minimum_size = Vector2(0, 0 if landscape else 150)
+	_floor_gap.custom_minimum_size = Vector2(0, 150)
+	_hint.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if landscape else Control.SIZE_FILL
+	_hint.custom_minimum_size = Vector2(400 if landscape else 0, 0)
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if landscape else HORIZONTAL_ALIGNMENT_CENTER
 
 
 ## Shows the spin as chevrons pointing the way the ball is being pushed:

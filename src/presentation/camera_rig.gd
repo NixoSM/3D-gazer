@@ -23,11 +23,15 @@ extends Camera3D
 ## view only distorts more), up to `max_fov`.
 @export var fast_fov_per_speed := 0.5
 @export var max_fov := 98.0
-## In landscape, keeping the portrait's vertical angle would open the view
-## sideways to 107° at rest and over 135° at top speed: a fisheye. The
-## vertical angle is narrowed by aspect^-squeeze instead, which keeps the
-## ball, the floor ahead and the walls streaming past at the edges.
-@export var landscape_squeeze := 0.35
+## How far ahead you can read the floor depends on the focal length: how
+## many points on screen a metre of floor gets. A phone turned sideways keeps
+## its long side, so landscape matches portrait when its *horizontal* angle
+## equals portrait's *vertical* one: aspect^-1 (squeeze 1). Landscape then
+## shows exactly portrait's middle band, plus extra width at the sides.
+## (The first landscape build used 0.35 to avoid a fisheye, but that shrank
+## everything ahead to 60% and left 30% less time to read patterns:
+## tools/framing_report.tscn measures it.)
+@export var landscape_squeeze := 1.0
 ## Camera rumble from speed, in metres, reached at 24 m/s. Starts at 15 m/s.
 @export var speed_rumble := 0.022
 
